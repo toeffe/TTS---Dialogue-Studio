@@ -190,8 +190,8 @@ body:not(.local) .local-only { display: none; }
     <p id="intro">Chat speaks one line. The name before the colon picks the voice for that line.</p>
   </div>
   <aside class="notice">
-    <strong>Streaming TTS is only in the downloaded app.</strong>
-    This website speaks lines in your browser. It does not listen to Twitch, and OBS cannot use this page. Download the Windows version, then open Streaming TTS there.
+    <strong>The Paradee server is not running on this PC.</strong>
+    Double-click start.bat and leave that window open, then reload this page. The channel field and the OBS address show up here. Speech still runs on this computer.
   </aside>
   <ol class="steps local-only">
     <li>Double-click <code>start.bat</code> and leave that window open.</li>
@@ -234,7 +234,7 @@ function showVoices() {
   document.body.classList.remove('local');
   document.title = 'Paradee — Voices';
   document.getElementById('title').textContent = 'Voices';
-  document.getElementById('intro').textContent = 'These are the voices in the studio. The chat command in the last column is for a stream that runs the downloaded app.';
+  document.getElementById('intro').textContent = 'These are the voices. With start.bat running, reload this page to set the channel.';
 }
 
 const channelInput = document.getElementById('channel');
