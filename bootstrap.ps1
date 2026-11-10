@@ -140,7 +140,7 @@ try {
     $waiter.Runspace.Open()
     [void]$waiter.BeginInvoke()
 
-    & $Python $Server
+    & $Python -u $Server
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } catch {
     Write-Host $_.Exception.Message

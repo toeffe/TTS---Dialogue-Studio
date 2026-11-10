@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Streaming TTS</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.ico" sizes="any">
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #000000;
+  --surface: #1C1C1E;
+  --border: rgba(84, 84, 88, 0.65);
+  --border-subtle: rgba(84, 84, 88, 0.36);
+  --text: #F5F5F7;
+  --text-muted: rgba(235, 235, 245, 0.6);
+  --text-faint: rgba(235, 235, 245, 0.3);
+  --focus: #0A84FF;
+  --radius: 10px;
+  --font: system-ui, -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --space: 8px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+.shell {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: calc(var(--space) * 4) calc(var(--space) * 3) calc(var(--space) * 8);
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space) * 2);
+  padding-bottom: calc(var(--space) * 3);
+  margin-bottom: calc(var(--space) * 3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.logo {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.topbar-meta {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+}
+.topbar .grow { flex: 1; }
+a.ghost {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  text-decoration: none;
+}
+a.ghost:hover { background: var(--surface); color: var(--text); border-color: var(--border); }
+a.ghost:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.page-title { margin-bottom: calc(var(--space) * 3); }
+.page-title h1 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  margin-bottom: 6px;
+}
+.page-title p { font-size: 14px; color: var(--text-muted); max-width: 42em; }
+.steps {
+  margin: 0 0 calc(var(--space) * 3);
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+.steps li {
+  counter-increment: step;
+  position: relative;
+  padding: 10px 0 10px 28px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 14px;
+}
+.steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.channel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.channel input {
+  width: 100%;
+  max-width: 280px;
+  min-height: 36px;
+  padding: 0 12px;
+  font: 14px var(--mono);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+.channel input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.url {
+  margin: 0 0 calc(var(--space) * 4);
+  padding: 10px 12px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.page-title code, .steps code {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+}
+.voices {
+  width: 100%;
+  border-collapse: collapse;
+}
+.voices th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text-faint);
+  padding: 0 12px 8px;
+}
+.voices td {
+  padding: 12px;
+  border-top: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+.voices td.cmd {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+@media (max-width: 600px) {
+  .shell { padding: 20px 16px 48px; }
+  .voices th:nth-child(2), .voices td:nth-child(2) { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  a.ghost { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="logo">paradee</div>
+    <div class="topbar-meta">v1.3</div>
+    <div class="grow"></div>
+    <a class="ghost" href="index.html">Studio</a>
+  </header>
+  <div class="page-title">
+    <h1>Streaming TTS</h1>
+    <p>Chat speaks one line. The name before the colon picks the voice for that line.</p>
+  </div>
+  <ol class="steps">
+    <li>Double-click <code>start.bat</code> and leave that window open.</li>
+    <li>In OBS, add a Browser Source with the address below. Check “Control audio via OBS”.</li>
+    <li>Keep that source in the scene. Slide it off the canvas if the small status line should stay off stream.</li>
+    <li>In chat, type <code>!tts puck: hello chat</code>.</li>
+  </ol>
+  <label class="channel">Twitch channel
+    <input id="channel" placeholder="channel name" spellcheck="false" autocomplete="off">
+  </label>
+  <p class="url">http://127.0.0.1:8765/listen</p>
+  <table class="voices">
+    <thead>
+      <tr><th>Voice</th><th>Language</th><th>Chat</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Heart</td><td>English (US)</td><td class="cmd">!tts heart: hello</td></tr>
+      <tr><td>Isabella</td><td>English (UK)</td><td class="cmd">!tts isabella: hello</td></tr>
+      <tr><td>Puck</td><td>English (US)</td><td class="cmd">!tts puck: hello</td></tr>
+      <tr><td>Fable</td><td>English (UK)</td><td class="cmd">!tts fable: hello</td></tr>
+      <tr><td>Alpha</td><td>Hindi</td><td class="cmd">!tts alpha: hello</td></tr>
+      <tr><td>Omega</td><td>Hindi</td><td class="cmd">!tts omega: hello</td></tr>
+      <tr><td>Siwis</td><td>French</td><td class="cmd">!tts siwis: hello</td></tr>
+      <tr><td>Alex</td><td>Spanish</td><td class="cmd">!tts alex: hello</td></tr>
+    </tbody>
+  </table>
+</div>
+<script>
+const channelInput = document.getElementById('channel');
+const channelKey = 'streaming-tts-channel';
+let saveTimer = null;
+
+function cleanChannel(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 25);
+}
+
+function remember(name) {
+  try { localStorage.setItem(channelKey, name); } catch { /* the server copy is the one OBS uses */ }
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    fetch('/channel', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({channel: name})
+    }).catch(() => {});
+  }, 300);
+}
+
+async function loadChannel() {
+  let name = '';
+  try {
+    const response = await fetch('/channel', {cache: 'no-store'});
+    if (response.ok) name = cleanChannel((await response.json()).channel);
+  } catch { /* use the browser copy below */ }
+  if (!name) {
+    try { name = cleanChannel(localStorage.getItem(channelKey)); } catch { name = ''; }
+    if (name) remember(name);
+  }
+  if (name) channelInput.value = name;
+}
+
+channelInput.addEventListener('input', () => remember(cleanChannel(channelInput.value)));
+loadChannel();
+</script>
+</body>
+</html>

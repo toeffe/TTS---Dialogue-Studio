@@ -24,6 +24,22 @@ Manual start, after setup:
 
 If `.venv` is a normal virtual environment, use `.venv\Scripts\python.exe server.py` instead.
 
+Other programs on this PC can request speech while that server is running. The response is a WAV file.
+
+```
+http://127.0.0.1:8765/speak?text=Hello&voice=af_heart
+```
+
+POST the same path with `{"text":"Hello","voice":"af_heart","speed":1}` for a longer line. `POST /dialogue` still accepts a full scene. `GET /health` reports when the model is ready.
+
+Twitch chat in OBS stays on the popout. Speech is a second Browser Source:
+
+```
+http://127.0.0.1:8765/listen
+```
+
+Turn on “Control audio via OBS” for that source. Ordinary chat stays quiet. A viewer speaks one line with `!tts puck: hello chat`. The name before the colon picks the voice for that line. Setup and the voice names are on the Streaming TTS page, http://127.0.0.1:8765/voices.html : heart, isabella, puck, fable, alpha, omega, siwis, alex.
+
 ## Credits
 
 Speech is [Paradee 1.3](https://github.com/sahilmahendrakar/paradee) by Sahil Mahendrakar, Apache-2.0. The model is [Paradee-8M-v1.3](https://huggingface.co/sahilmahendrakar/Paradee-8M-v1.3).

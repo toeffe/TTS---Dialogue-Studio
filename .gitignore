@@ -1,2 +1,6 @@
 .venv/
+channel.txt
 Copy.zip
+_pycache_/
+__pycache__/server.cpython-310.pyc
+channel.txt
