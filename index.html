@@ -174,6 +174,59 @@ button.icon:not(:disabled):hover {
 button.icon.danger:not(:disabled):hover { color: var(--danger); background: rgba(255,69,58,0.12); }
 button.icon.add:not(:disabled):hover { color: var(--primary); background: rgba(48, 209, 88, 0.12); }
 
+button[data-tip] { position: relative; }
+button[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  z-index: 15;
+  width: max-content;
+  max-width: 240px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-50%) translateY(4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+button[data-tip]:hover::after,
+button[data-tip]:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  transition-delay: 280ms;
+}
+#loadExample::after,
+#loadJson::after {
+  left: 0;
+  transform: translateY(4px);
+}
+#loadExample:hover::after,
+#loadExample:focus-visible::after,
+#loadJson:hover::after,
+#loadJson:focus-visible::after {
+  transform: translateY(0);
+}
+#followSpeaker::after {
+  left: auto;
+  right: 0;
+  transform: translateY(4px);
+}
+#followSpeaker:hover::after,
+#followSpeaker:focus-visible::after {
+  transform: translateY(0);
+}
+
 .script {
   margin-top: calc(var(--space) * 3);
   border: 1px solid var(--border-subtle);
@@ -470,7 +523,7 @@ a.download {
 .shell.dropping .script { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
-  button, .field-text {
+  button, .field-text, button[data-tip]::after {
     transition: none !important;
     animation: none !important;
   }
@@ -493,12 +546,12 @@ a.download {
   </div>
 
   <div class="toolbar">
-    <button type="button" class="ghost" id="loadExample">Example</button>
-    <button type="button" class="ghost" id="loadJson">Import JSON</button>
-    <button type="button" class="ghost" id="exportJson">Export JSON</button>
-    <button type="button" class="ghost" id="aiInstructions">AI Instructions</button>
+    <button type="button" class="ghost" id="loadExample" data-tip="Load a short sample conversation" aria-description="Load a short sample conversation">Example</button>
+    <button type="button" class="ghost" id="loadJson" data-tip="Paste conversation JSON, or drop a .json file" aria-description="Paste conversation JSON, or drop a .json file">Import JSON</button>
+    <button type="button" class="ghost" id="exportJson" data-tip="Copy the current lines as JSON" aria-description="Copy the current lines as JSON">Export JSON</button>
+    <button type="button" class="ghost" id="aiInstructions" data-tip="Copy a prompt that tells an AI how to write the JSON" aria-description="Copy a prompt that tells an AI how to write the JSON">AI Instructions</button>
     <div class="grow"></div>
-    <button type="button" class="ghost" id="followSpeaker" aria-pressed="false">Follow speaker</button>
+    <button type="button" class="ghost" id="followSpeaker" data-tip="Scroll the page to the line that is speaking" aria-description="Scroll the page to the line that is speaking" aria-pressed="false">Follow speaker</button>
     <button type="button" class="ghost" id="stop" disabled>Stop</button>
     <button type="button" class="primary" id="generate"><span id="generateLabel">Generate</span><span id="activity" class="activity" hidden><span id="spinner" class="spinner" style="--pct:0" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></span><span id="spinnerPct">0%</span></span></button>
   </div>
@@ -526,9 +579,8 @@ a.download {
   </div>
 
   <p class="site-foot">
-    runs in this browser
-    · <a href="https://github.com/sahilmahendrakar/paradee" target="_blank" rel="noopener">source</a>
-    · <a href="https://huggingface.co/sahilmahendrakar/Paradee-8M-v1.3" target="_blank" rel="noopener">model</a>
+    Link to model:
+    · <a href="https://huggingface.co/sahilmahendrakar/Paradee-8M-v1.3" target="_blank" rel="noopener">Paradee-8M-v1.3</a>
   </p>
 </div>
 
