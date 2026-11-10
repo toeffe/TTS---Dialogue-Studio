@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Paradee — Dialogue Studio</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #000000;
+  --surface: #1C1C1E;
+  --surface-2: #2C2C2E;
+  --border: rgba(84, 84, 88, 0.65);
+  --border-subtle: rgba(84, 84, 88, 0.36);
+  --text: #F5F5F7;
+  --text-muted: rgba(235, 235, 245, 0.6);
+  --text-faint: rgba(235, 235, 245, 0.3);
+  --primary: #30D158;
+  --primary-hover: #28C84E;
+  --on-primary: #FFFFFF;
+  --danger: #FF453A;
+  --focus: #0A84FF;
+  --accent-soft: rgba(235, 235, 245, 0.78);
+  --radius: 10px;
+  --font: system-ui, -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --space: 8px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+.shell {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: calc(var(--space) * 4) calc(var(--space) * 3) calc(var(--space) * 8);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space) * 2);
+  padding-bottom: calc(var(--space) * 3);
+  margin-bottom: calc(var(--space) * 3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.logo {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.logo span { color: var(--primary); }
+.topbar-meta {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+}
+.topbar .grow { flex: 1; }
+#engineStatus {
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--text-faint);
+}
+#engineStatus.ok { color: var(--primary); }
+#engineStatus.error { color: var(--danger); }
+
+.page-title {
+  margin-bottom: calc(var(--space) * 3);
+}
+.page-title h1 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  margin-bottom: 6px;
+}
+.page-title p {
+  font-size: 14px;
+  color: var(--text-muted);
+  max-width: 42em;
+  line-height: 1.5;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space);
+  margin-bottom: calc(var(--space) * 2);
+}
+.toolbar .grow { flex: 1; min-width: 4px; }
+
+button, .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 80ms ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button:not(:disabled):active { transform: scale(0.98); }
+button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+button.ghost {
+  background: transparent;
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+}
+button.ghost:not(:disabled):hover {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+button.primary {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--primary);
+  font-weight: 600;
+}
+button.primary:not(:disabled):hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+button.icon {
+  min-width: 36px;
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-faint);
+}
+button.icon:not(:disabled):hover {
+  background: var(--surface);
+  color: var(--text);
+}
+button.icon.danger:not(:disabled):hover { color: var(--danger); background: rgba(255,69,58,0.12); }
+
+.script {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.line {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.line:last-child { border-bottom: 0; }
+.line:focus-within {
+  background: rgba(248, 250, 252, 0.03);
+}
+.line-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.line-num {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-faint);
+  min-width: 1.8em;
+}
+.field-speaker {
+  width: 120px;
+  max-width: 30vw;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-soft);
+  outline: none;
+}
+.field-speaker:hover,
+.field-speaker:focus {
+  border-bottom-color: var(--border);
+}
+.field-voice {
+  flex: 1;
+  min-width: 140px;
+  max-width: 240px;
+  background: var(--bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-family: var(--mono);
+  padding: 5px 28px 5px 10px;
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2364748B' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  cursor: pointer;
+}
+.field-voice:hover,
+.field-voice:focus {
+  border-color: var(--border);
+  color: var(--text);
+}
+.field-voice:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.line-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+}
+.field-text {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 10px 12px;
+  resize: vertical;
+  min-height: 56px;
+  outline: none;
+  transition: border-color 160ms ease;
+}
+.field-text:hover { border-color: var(--border); }
+.field-text:focus {
+  border-color: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--border);
+}
+.field-text:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.field-text::placeholder { color: var(--text-faint); }
+
+.feedback {
+  margin-top: calc(var(--space) * 2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+#status {
+  font-size: 13px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  min-height: 1.2em;
+}
+#status.ok { color: var(--primary); }
+#status.error { color: var(--danger); }
+
+progress {
+  display: block;
+  width: 100%;
+  height: 3px;
+  margin-top: 12px;
+  border: 0;
+  appearance: none;
+  background: var(--border-subtle);
+  border-radius: 2px;
+  overflow: hidden;
+}
+progress::-webkit-progress-bar { background: var(--border-subtle); }
+progress::-webkit-progress-value {
+  background: var(--primary);
+  transition: width 200ms ease;
+}
+progress::-moz-progress-bar { background: var(--primary); }
+
+/* Result */
+.result {
+  display: none;
+  margin-top: calc(var(--space) * 3);
+  padding: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.result-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 12px;
+}
+audio {
+  width: 100%;
+  height: 40px;
+  margin-bottom: 12px;
+}
+.download {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--primary);
+  text-decoration: none;
+}
+.download:hover { text-decoration: underline; }
+.download:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Defaults */
+.defaults {
+  margin-top: calc(var(--space) * 4);
+  padding-top: calc(var(--space) * 3);
+  border-top: 1px solid var(--border-subtle);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.defaults label {
+  display: block;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.defaults input {
+  width: 100%;
+  min-height: 36px;
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  color: var(--text);
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 0 12px;
+  outline: none;
+}
+.defaults input:hover { border-color: var(--border); }
+.defaults input:focus {
+  border-color: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--border);
+}
+.defaults input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.site-foot {
+  margin-top: calc(var(--space) * 5);
+  font-size: 12px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+}
+.site-foot a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.site-foot a:hover { color: var(--text); text-decoration: underline; }
+
+@media (max-width: 600px) {
+  .shell { padding: 20px 16px 48px; }
+  .defaults { grid-template-columns: 1fr; }
+  .line-head { gap: 8px; }
+  .field-speaker { width: 100px; }
+  .toolbar button { min-height: 40px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button, .field-text, progress::-webkit-progress-value {
+    transition: none !important;
+  }
+  button:not(:disabled):active { transform: none; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="logo">paradee<span>·</span>studio</div>
+    <div class="topbar-meta">v1.3</div>
+    <div class="grow"></div>
+    <div id="engineStatus">checking…</div>
+  </header>
+
+  <div class="page-title">
+    <h1>Dialogue Studio</h1>
+    <p>Assign a voice to each line, synthesize in this browser, and export one combined WAV. Eight voices across English, Hindi, French, and Spanish.</p>
+  </div>
+
+  <div class="toolbar">
+    <button type="button" class="ghost" id="add">Add line</button>
+    <button type="button" class="ghost" id="loadExample">Example</button>
+    <button type="button" class="ghost" id="loadJson">Import JSON</button>
+    <button type="button" class="ghost" id="exportJson">Export JSON</button>
+    <div class="grow"></div>
+    <button type="button" class="ghost" id="stop" disabled>Stop</button>
+    <button type="button" class="primary" id="generate">Generate</button>
+  </div>
+  <input type="file" id="jsonFile" accept=".json,application/json" hidden>
+
+  <div class="script" id="segments" role="list"></div>
+
+  <div class="feedback">
+    <div id="status" role="status" aria-live="polite"></div>
+  </div>
+  <progress id="progress" value="0" max="100" hidden></progress>
+
+  <div id="result" class="result">
+    <div class="result-label">Output</div>
+    <audio id="player" controls></audio>
+    <a id="download" class="download" download="paradee-dialogue.wav">Download WAV</a>
+  </div>
+
+  <div class="defaults">
+    <div>
+      <label for="defaultSpeed">Speaking speed</label>
+      <input id="defaultSpeed" type="number" min=".5" max="2" step=".05" value="1">
+    </div>
+    <div>
+      <label for="pause">Pause between lines (ms)</label>
+      <input id="pause" type="number" min="0" max="5000" step="50" value="350">
+    </div>
+  </div>
+
+  <p class="site-foot">
+    runs in this browser
+    · <a href="https://github.com/sahilmahendrakar/paradee" target="_blank" rel="noopener">source</a>
+    · <a href="https://huggingface.co/sahilmahendrakar/Paradee-8M-v1.3" target="_blank" rel="noopener">model</a>
+  </p>
+</div>
+
+<script type="module">
+import { loadEngine, synthesize } from './web/tts.js';
+const VOICES=[
+  {id:'af_heart',name:'Heart',lang:'en-US'},
+  {id:'bf_isabella',name:'Isabella',lang:'en-GB'},
+  {id:'am_puck',name:'Puck',lang:'en-US'},
+  {id:'bm_fable',name:'Fable',lang:'en-GB'},
+  {id:'hf_alpha',name:'Alpha',lang:'hi'},
+  {id:'hm_omega',name:'Omega',lang:'hi'},
+  {id:'ff_siwis',name:'Siwis',lang:'fr'},
+  {id:'em_alex',name:'Alex',lang:'es'}
+];
+const $=id=>document.getElementById(id);
+let audioUrl=null, nextId=1;
+const EXAMPLE_JSON={
+  title:"The Kitchen Meeting",
+  pause_ms:320,
+  segments:[
+    {speaker:"Alice",voice:"af_heart",text:"Okay everyone, huddle up. We have a serious problem."},
+    {speaker:"Bob",voice:"am_puck",text:"If this is about the coffee again, I already forgave you."},
+    {speaker:"Clara",voice:"bf_isabella",text:"It's not about the coffee, Bob. The client moved the demo to tomorrow morning."},
+    {speaker:"Alice",voice:"af_heart",text:"Tomorrow? We still have three open bugs and the slides are a mess."},
+    {speaker:"Bob",voice:"am_puck",text:"I can stay late and fix the login crash. Should take me a couple of hours."},
+    {speaker:"Clara",voice:"bf_isabella",text:"Brilliant. I'll rebuild the deck tonight. Alice, can you handle the data story?"},
+    {speaker:"Alice",voice:"af_heart",text:"Already on it. But someone has to order pizza. Brain food is non-negotiable."},
+    {speaker:"Bob",voice:"am_puck",text:"I'll order. Extra cheese, no pineapple. Any objections?"},
+    {speaker:"Clara",voice:"bf_isabella",text:"None from me. Let's get this done and still look human in the morning."},
+    {speaker:"Alice",voice:"af_heart",text:"Deal. Kitchen table in ten minutes. Bring your laptops."},
+    {speaker:"Bob",voice:"am_puck",text:"And coffee. Locked this time."},
+    {speaker:"Clara",voice:"bf_isabella",text:"Honestly Bob, that lock is never happening."}
+  ]
+};
+const lines=[];
+
+function voiceOptions(selected){
+  return VOICES.map(v=>`<option value="${v.id}" ${v.id===selected?'selected':''}>${v.name} · ${v.lang}</option>`).join('');
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function escapeAttr(s){return escapeHtml(s)}
+
+function render(){
+  $('segments').innerHTML=lines.map((l,i)=>`
+    <article class="line" data-id="${l.id}" role="listitem">
+      <div class="line-head">
+        <span class="line-num">${String(i+1).padStart(2,'0')}</span>
+        <input class="field-speaker" data-field="speaker" value="${escapeAttr(l.speaker)}" placeholder="Speaker" spellcheck="false" aria-label="Speaker name">
+        <select class="field-voice" data-field="voice" aria-label="Voice">${voiceOptions(l.voice)}</select>
+        <div class="line-actions">
+          <button type="button" class="icon" data-action="up" ${i===0?'disabled':''} aria-label="Move line up">↑</button>
+          <button type="button" class="icon" data-action="down" ${i===lines.length-1?'disabled':''} aria-label="Move line down">↓</button>
+          <button type="button" class="icon danger" data-action="remove" ${lines.length===1?'disabled':''} aria-label="Remove line">×</button>
+        </div>
+      </div>
+      <textarea class="field-text" data-field="text" rows="2" placeholder="Dialogue text" aria-label="Dialogue for ${escapeAttr(l.speaker)}">${escapeHtml(l.text)}</textarea>
+    </article>`).join('');
+}
+
+$('segments').addEventListener('input',e=>{
+  const el=e.target.closest('[data-field]'); if(!el) return;
+  const card=el.closest('[data-id]');
+  const l=lines.find(x=>x.id===Number(card.dataset.id));
+  l[el.dataset.field]=el.value;
+});
+$('segments').addEventListener('change',e=>{
+  const el=e.target.closest('[data-field]'); if(!el) return;
+  const card=el.closest('[data-id]');
+  const l=lines.find(x=>x.id===Number(card.dataset.id));
+  l[el.dataset.field]=el.value;
+});
+$('segments').addEventListener('click',e=>{
+  const b=e.target.closest('[data-action]'); if(!b) return;
+  const card=b.closest('[data-id]');
+  const i=lines.findIndex(x=>x.id===Number(card.dataset.id));
+  const a=b.dataset.action;
+  if(a==='remove'&&lines.length>1) lines.splice(i,1);
+  if(a==='up'&&i>0) [lines[i-1],lines[i]]=[lines[i],lines[i-1]];
+  if(a==='down'&&i<lines.length-1) [lines[i+1],lines[i]]=[lines[i],lines[i+1]];
+  render();
+});
+
+$('add').onclick=()=>{
+  lines.push({id:nextId++,speaker:`Speaker ${lines.length+1}`,voice:'af_heart',text:'',speed:null});
+  render();
+  const last=$('segments').lastElementChild;
+  if(last){ last.scrollIntoView({behavior:'smooth',block:'center'}); last.querySelector('textarea')?.focus(); }
+};
+
+const VALID_VOICES=new Set(VOICES.map(v=>v.id));
+function applyConversation(data){
+  if(!data||typeof data!=='object') throw Error('JSON must be an object.');
+  const segs=data.segments||data.lines||data.dialogue;
+  if(!Array.isArray(segs)||!segs.length) throw Error('JSON needs a non-empty "segments" array.');
+  if(segs.length>200) throw Error('Too many lines (max 200).');
+  const next=[];
+  for(const s of segs){
+    const text=String(s?.text??s?.utterance??'').trim();
+    if(!text) continue;
+    let voice=String(s.voice||'af_heart');
+    if(!VALID_VOICES.has(voice)) voice='af_heart';
+    next.push({
+      id:nextId++,
+      speaker:String(s.speaker||s.name||`Speaker ${next.length+1}`),
+      voice, text,
+      speed:s.speed!=null?Number(s.speed):null
+    });
+  }
+  if(!next.length) throw Error('No valid dialogue lines found.');
+  lines.length=0;
+  lines.push(...next);
+  if(data.pause_ms!=null) $('pause').value=Math.max(0,Math.min(5000,Number(data.pause_ms)||0));
+  if(data.speed!=null||data.default_speed!=null){
+    const sp=Number(data.speed??data.default_speed);
+    if(sp>=0.5&&sp<=2) $('defaultSpeed').value=sp;
+  }
+  render();
+  status(`Loaded ${lines.length} lines${data.title?` · ${data.title}`:''}`,'ok');
+}
+function loadFromText(raw){
+  try { applyConversation(JSON.parse(raw)); }
+  catch(e){ status('Could not load JSON: '+e.message,'error'); }
+}
+$('loadExample').onclick=()=>applyConversation(EXAMPLE_JSON);
+$('loadJson').onclick=()=>{
+  const choice=window.prompt('Paste JSON, or leave blank to choose a file:','');
+  if(choice===null) return;
+  if(choice.trim()){ loadFromText(choice.trim()); return; }
+  $('jsonFile').value='';
+  $('jsonFile').click();
+};
+$('jsonFile').onchange=async e=>{
+  const f=e.target.files?.[0]; if(!f) return;
+  try { loadFromText(await f.text()); }
+  catch(err){ status('Failed to read file: '+err.message,'error'); }
+};
+$('exportJson').onclick=()=>{
+  const active=lines.filter(l=>l.text.trim());
+  if(!active.length){ status('Nothing to export','error'); return; }
+  const payload={
+    title:'Paradee dialogue',
+    pause_ms:Math.max(0,Math.min(5000,Number($('pause').value)||0)),
+    segments:active.map(l=>({speaker:l.speaker,voice:l.voice,text:l.text.trim()}))
+  };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='paradee-dialogue.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  status(`Exported ${active.length} lines`,'ok');
+};
+
+function status(s,kind=''){
+  $('status').textContent=s;
+  $('status').className=kind||'';
+}
+function engineStatus(s,kind=''){
+  $('engineStatus').textContent=s;
+  $('engineStatus').className=kind||'';
+}
+let engine=null;
+async function boot(){
+  $('generate').disabled=true;
+  engineStatus('loading model…');
+  try {
+    engine=await loadEngine(msg=>engineStatus(msg));
+    engineStatus('ready','ok');
+    $('generate').disabled=false;
+  } catch(e) {
+    engineStatus('model failed','error');
+    status(e.message,'error');
+  }
+}
+async function runDialogue(){
+  const active=lines.filter(l=>l.text.trim());
+  if(!active.length){ status('Add dialogue text first','error'); return; }
+  if(!engine){ status('The model is still loading','error'); return; }
+  $('generate').disabled=true;
+  $('stop').disabled=false;
+  $('progress').hidden=false;
+  $('progress').value=0;
+  $('result').style.display='none';
+  try {
+    const segments=active.map(l=>({
+      voice:l.voice, text:l.text.trim(),
+      speed:Number($('defaultSpeed').value)||1
+    }));
+    const pause=Math.max(0,Math.min(5000,Number($('pause').value)||0));
+    status('Synthesizing…');
+    const blob=await synthesize(engine, segments, pause, (done,total)=>{
+      $('progress').value=Math.round(done/total*100);
+      status(`Synthesizing ${done}/${total}`);
+    });
+    if(!blob.size) throw Error('Empty audio');
+    if(audioUrl) URL.revokeObjectURL(audioUrl);
+    audioUrl=URL.createObjectURL(blob);
+    $('player').src=audioUrl;
+    $('download').href=audioUrl;
+    $('result').style.display='block';
+    $('progress').value=100;
+    status(`Done · ${active.length} lines`,'ok');
+    $('player').play().catch(()=>{});
+  } catch(e) {
+    status('Failed: '+e.message,'error');
+  } finally {
+    $('generate').disabled=false;
+    $('stop').disabled=false;
+  }
+}
+$('generate').onclick=()=>runDialogue();
+$('stop').onclick=()=>{ $('player').pause(); $('player').currentTime=0; };
+
+applyConversation(EXAMPLE_JSON);
+boot();
+</script>
+</body>
+</html>
