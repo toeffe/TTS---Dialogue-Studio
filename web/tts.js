@@ -28,6 +28,7 @@ const E2M_OTHER = [
 ];
 
 ort.env.wasm.numThreads = 1;
+ort.env.wasm.proxy = true;
 ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/';
 
 async function cached(url, onBytes) {
@@ -212,6 +213,8 @@ export async function synthesize(engine, segments, pauseMs, onProgress) {
   const { espeak, session, config, sampleRate } = engine;
   const lines = [];
   for (let i = 0; i < segments.length; i++) {
+    if (onProgress) onProgress(i, segments.length);
+    await new Promise(resolve => setTimeout(resolve, 30));
     const segment = segments[i];
     const voice = segment.voice in LANG ? segment.voice : 'af_heart';
     const speed = Math.max(0.5, Math.min(2, Number(segment.speed) || 1));
@@ -222,8 +225,8 @@ export async function synthesize(engine, segments, pauseMs, onProgress) {
       for (const piece of chunks(phonemes)) pieces.push(await runChunk(session, tokenIds(piece, config.vocab), speed, voiceIndex));
     }
     if (pieces.length) lines.push(concat(pieces));
-    if (onProgress) onProgress(i + 1, segments.length);
   }
+  if (onProgress) onProgress(segments.length, segments.length);
   if (!lines.length) throw new Error('No audio was generated.');
   const pauseSamples = Math.max(0, Math.round(sampleRate * pauseMs / 1000));
   return encodeWav(joinLines(lines, pauseSamples), sampleRate);
