@@ -12,12 +12,14 @@
   color-scheme: dark;
   --bg: #000000;
   --surface: #1C1C1E;
+  --surface-2: #2C2C2E;
   --border: rgba(84, 84, 88, 0.65);
   --border-subtle: rgba(84, 84, 88, 0.36);
   --text: #F5F5F7;
   --text-muted: rgba(235, 235, 245, 0.6);
   --text-faint: rgba(235, 235, 245, 0.3);
   --focus: #0A84FF;
+  --primary: #30D158;
   --radius: 10px;
   --font: system-ui, -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -57,6 +59,47 @@ body {
   font-family: var(--mono);
 }
 .topbar .grow { flex: 1; }
+.top-status {
+  position: relative;
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--text-faint);
+  cursor: help;
+}
+.top-status.ok { color: var(--primary); }
+.top-status.down { color: #FF6961; }
+.top-status[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 15;
+  width: max-content;
+  max-width: 240px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+.top-status[data-tip]:hover::after,
+.top-status[data-tip]:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 280ms;
+}
 a.ghost {
   display: inline-flex;
   align-items: center;
@@ -142,13 +185,63 @@ body:not(.local) .local-only { display: none; }
   list-style: none;
 }
 .guide summary::-webkit-details-marker { display: none; }
-.guide summary::before { content: '▸  '; color: var(--text-faint); font-family: var(--mono); }
-.guide[open] summary::before { content: '▾  '; }
+.guide > summary::before { content: '▸  '; color: var(--text-faint); font-family: var(--mono); }
+.guide[open] > summary::before { content: '▾  '; }
 .guide .steps { margin-top: 8px; }
-.live { margin: 0 0 calc(var(--space) * 2); font-size: 14px; }
-.live p { margin: 0 0 4px; }
-.live .k { display: inline-block; width: 4.5em; color: var(--text-faint); font-family: var(--mono); font-size: 12px; }
-.controls { display: flex; gap: 8px; margin: 0 0 calc(var(--space) * 3); }
+.guide .channel { margin-top: 12px; }
+.guide .url { margin: 8px 0 0; }
+.guide .guide { margin: 12px 0 0; }
+.guide .voices { margin-top: 8px; }
+body:not(.local) #voicesGuide > summary { display: none; }
+.script {
+  max-height: 440px;
+  margin: 0 0 calc(var(--space) * 2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: auto;
+}
+.line {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.line:last-child { border-bottom: 0; }
+.line.speaking {
+  background: rgba(48, 209, 88, 0.12);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+.line-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.line-num {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  min-width: 1.8em;
+}
+.line-speaker { font-size: 13px; font-weight: 600; }
+.line-voice { font-family: var(--mono); font-size: 12px; color: var(--text-muted); }
+.line-state {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.line.speaking .line-state { color: var(--primary); }
+.line-text {
+  background: var(--bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.line.idle .line-text { color: var(--text-faint); }
+.controls { display: flex; gap: 8px; margin: 0 0 calc(var(--space) * 2); }
 .controls button {
   min-height: 36px;
   padding: 0 14px;
@@ -209,9 +302,10 @@ body:not(.local) .local-only { display: none; }
 <body>
 <div class="shell">
   <header class="topbar">
-    <div class="logo">Browser TTS</div>
     <div class="topbar-meta">v1.3</div>
     <div class="grow"></div>
+    <div class="top-status local-only" id="serverState" tabindex="0" data-tip="Double-click start.bat and leave that window open.">checking…</div>
+    <div class="top-status local-only" id="listener" tabindex="0" data-tip="In OBS, right-click the browser source and choose Refresh.">checking…</div>
     <a class="ghost" href="index.html">Studio</a>
   </header>
   <div class="page-title">
@@ -222,42 +316,44 @@ body:not(.local) .local-only { display: none; }
     <strong>The Paradee server is not running on this PC.</strong>
     Double-click start.bat and leave that window open, then reload this page. The channel field and the OBS address show up here. Speech still runs on this computer.
   </aside>
-  <details class="guide local-only" id="guide" open>
-    <summary>Setup</summary>
-    <ol class="steps">
-      <li>Double-click <code>start.bat</code> and leave that window open.</li>
-      <li>In OBS, add a Browser Source with the address below. Check “Control audio via OBS”.</li>
-      <li>Keep that source in the scene. Slide it off the canvas if the small status line should stay off stream.</li>
-      <li>In chat, type <code>!tts puck: hello chat</code>.</li>
-    </ol>
+  <details class="guide" id="guide" open>
+    <summary id="guideSummary">Setup</summary>
+    <div class="local-only">
+      <ol class="steps">
+        <li>Double-click <code>start.bat</code> and leave that window open.</li>
+        <li>In OBS, add a Browser Source with the address below. Check “Control audio via OBS”.</li>
+        <li>Keep that source in the scene. Slide it off the canvas if the small status line should stay off stream.</li>
+        <li>In chat, type <code>!tts puck: hello chat</code>.</li>
+      </ol>
+      <label class="channel">Twitch channel
+        <input id="channel" placeholder="channel name" spellcheck="false" autocomplete="off">
+      </label>
+      <p class="url">http://127.0.0.1:8765/listen</p>
+    </div>
+    <details class="guide" id="voicesGuide">
+      <summary>Voices</summary>
+      <table class="voices">
+        <thead>
+          <tr><th>Voice</th><th>Language</th><th>Chat</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Heart</td><td>English (US)</td><td class="cmd">!tts heart: hello</td></tr>
+          <tr><td>Isabella</td><td>English (UK)</td><td class="cmd">!tts isabella: hello</td></tr>
+          <tr><td>Puck</td><td>English (US)</td><td class="cmd">!tts puck: hello</td></tr>
+          <tr><td>Fable</td><td>English (UK)</td><td class="cmd">!tts fable: hello</td></tr>
+          <tr><td>Alpha</td><td>Hindi</td><td class="cmd">!tts alpha: hello</td></tr>
+          <tr><td>Omega</td><td>Hindi</td><td class="cmd">!tts omega: hello</td></tr>
+          <tr><td>Siwis</td><td>French</td><td class="cmd">!tts siwis: hello</td></tr>
+          <tr><td>Alex</td><td>Spanish</td><td class="cmd">!tts alex: hello</td></tr>
+        </tbody>
+      </table>
+    </details>
   </details>
-  <label class="channel local-only">Twitch channel
-    <input id="channel" placeholder="channel name" spellcheck="false" autocomplete="off">
-  </label>
-  <p class="url local-only">http://127.0.0.1:8765/listen</p>
-  <section class="live local-only" id="live" aria-live="polite">
-    <p><span class="k">Playing</span> <span id="nowPlaying">Idle</span></p>
-    <p><span class="k">Queue</span> <span id="queueList">Empty</span></p>
-  </section>
   <div class="controls local-only">
     <button type="button" id="skipLine">Skip</button>
     <button type="button" id="stopLine" class="stop">Stop</button>
   </div>
-  <table class="voices">
-    <thead>
-      <tr><th>Voice</th><th>Language</th><th>Chat</th></tr>
-    </thead>
-    <tbody>
-      <tr><td>Heart</td><td>English (US)</td><td class="cmd">!tts heart: hello</td></tr>
-      <tr><td>Isabella</td><td>English (UK)</td><td class="cmd">!tts isabella: hello</td></tr>
-      <tr><td>Puck</td><td>English (US)</td><td class="cmd">!tts puck: hello</td></tr>
-      <tr><td>Fable</td><td>English (UK)</td><td class="cmd">!tts fable: hello</td></tr>
-      <tr><td>Alpha</td><td>Hindi</td><td class="cmd">!tts alpha: hello</td></tr>
-      <tr><td>Omega</td><td>Hindi</td><td class="cmd">!tts omega: hello</td></tr>
-      <tr><td>Siwis</td><td>French</td><td class="cmd">!tts siwis: hello</td></tr>
-      <tr><td>Alex</td><td>Spanish</td><td class="cmd">!tts alex: hello</td></tr>
-    </tbody>
-  </table>
+  <div class="script local-only" id="queueBoard" role="list" aria-live="polite"></div>
 </div>
 <script>
 const LOOPBACK = location.hostname === '127.0.0.1' || location.hostname === 'localhost' || location.hostname === '[::1]';
@@ -268,6 +364,7 @@ function showStreaming() {
   document.title = 'Streaming TTS';
   document.getElementById('title').textContent = 'Streaming TTS';
   document.getElementById('intro').textContent = 'Chat speaks one line. The name before the colon picks the voice for that line.';
+  document.getElementById('guideSummary').textContent = 'Setup';
 }
 
 function showVoices() {
@@ -275,6 +372,9 @@ function showVoices() {
   document.title = 'Paradee — Voices';
   document.getElementById('title').textContent = 'Voices';
   document.getElementById('intro').textContent = 'These are the voices. With start.bat running, reload this page to set the channel.';
+  document.getElementById('guideSummary').textContent = 'Voices';
+  document.getElementById('guide').open = true;
+  document.getElementById('voicesGuide').open = true;
 }
 
 const channelInput = document.getElementById('channel');
@@ -315,28 +415,130 @@ function sendControl(action) {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({action})
-  }).catch(() => {});
+  }).then(response => {
+    if (!response.ok) throw new Error('control');
+  }).catch(() => {
+    const listener = document.getElementById('listener');
+    if (listener) listener.textContent = 'The Paradee server did not take that command. Leave start.bat open, then try again.';
+  });
 }
 const guide = document.getElementById('guide');
+const voicesGuide = document.getElementById('voicesGuide');
 const guideKey = 'streaming-tts-guide';
+const voicesKey = 'streaming-tts-voices';
 try {
   if (localStorage.getItem(guideKey) === 'closed') guide.open = false;
-} catch { /* leave the guide open */ }
+  if (localStorage.getItem(voicesKey) === 'open') voicesGuide.open = true;
+} catch { /* leave Setup open and Voices folded */ }
 guide.addEventListener('toggle', () => {
   try { localStorage.setItem(guideKey, guide.open ? 'open' : 'closed'); } catch { /* the click still folds the guide */ }
 });
+voicesGuide.addEventListener('toggle', () => {
+  try { localStorage.setItem(voicesKey, voicesGuide.open ? 'open' : 'closed'); } catch { /* the click still folds the list */ }
+});
+
+function asLine(item) {
+  if (!item) return null;
+  if (typeof item === 'string') {
+    const match = item.match(/^(.*?) \(([^)]+)\): ([\s\S]*)$/);
+    if (match) return {name: match[1], voice: match[2], text: match[3]};
+    return {name: '', voice: '', text: item};
+  }
+  const text = item.text || '';
+  if (!text && !item.name && !item.voice) return null;
+  return {name: item.name || '', voice: item.voice || '', text};
+}
+
+function lineBox(row, index) {
+  const article = document.createElement('article');
+  article.className = 'line' + (row.state === 'now' ? ' speaking' : '');
+  article.setAttribute('role', 'listitem');
+  const head = document.createElement('div');
+  head.className = 'line-head';
+  const num = document.createElement('span');
+  num.className = 'line-num';
+  num.textContent = String(index + 1).padStart(2, '0');
+  const speaker = document.createElement('span');
+  speaker.className = 'line-speaker';
+  speaker.textContent = row.name || 'Chat';
+  const voice = document.createElement('span');
+  voice.className = 'line-voice';
+  voice.textContent = row.voice || '';
+  const state = document.createElement('span');
+  state.className = 'line-state';
+  state.textContent = row.state === 'now' ? 'Playing' : 'Queued';
+  head.append(num, speaker, voice, state);
+  const text = document.createElement('div');
+  text.className = 'line-text';
+  text.textContent = row.text || '';
+  article.append(head, text);
+  return article;
+}
+
+function idleBox() {
+  const article = document.createElement('article');
+  article.className = 'line idle';
+  article.setAttribute('role', 'listitem');
+  const text = document.createElement('div');
+  text.className = 'line-text';
+  text.textContent = 'Idle';
+  article.append(text);
+  return article;
+}
+
+let queueKey = '';
+
+function renderBoard(connected, playing, items) {
+  const board = document.getElementById('queueBoard');
+  const rows = [];
+  if (connected && playing) rows.push(Object.assign({state: 'now'}, playing));
+  if (connected) {
+    for (const item of items) rows.push(Object.assign({state: 'wait'}, item));
+  }
+  const key = JSON.stringify(rows);
+  if (key === queueKey) return;
+  queueKey = key;
+  board.replaceChildren();
+  if (!rows.length) {
+    board.appendChild(idleBox());
+    return;
+  }
+  rows.forEach((row, index) => board.appendChild(lineBox(row, index)));
+  const current = board.querySelector('.speaking') || board.lastElementChild;
+  if (!current) return;
+  const top = current.getBoundingClientRect().top - board.getBoundingClientRect().top + board.scrollTop;
+  board.scrollTop = top;
+}
+
+function setServerState(running) {
+  const serverState = document.getElementById('serverState');
+  serverState.textContent = running ? 'server running' : 'server offline';
+  serverState.className = 'top-status local-only ' + (running ? 'ok' : 'down');
+}
 
 async function refreshQueue() {
   if (!document.body.classList.contains('local')) return;
   try {
     const response = await fetch(API + '/queue', {cache: 'no-store'});
-    if (!response.ok) return;
+    if (!response.ok) throw new Error('down');
+    setServerState(true);
     const data = await response.json();
-    document.getElementById('nowPlaying').textContent = data.live && data.playing ? data.playing : 'Idle';
-    const items = data.live && Array.isArray(data.queue) ? data.queue : [];
-    document.getElementById('queueList').textContent = items.length ? items.join(' · ') : 'Empty';
-  } catch { /* the listener may still be starting */ }
+    const connected = Boolean(data.listener);
+    const listener = document.getElementById('listener');
+    listener.textContent = connected ? 'obs connected' : 'obs offline';
+    listener.className = 'top-status local-only ' + (connected ? 'ok' : 'down');
+    const playing = connected ? asLine(data.playing) : null;
+    const items = connected && Array.isArray(data.queue) ? data.queue.map(asLine).filter(Boolean) : [];
+    renderBoard(connected, playing, items);
+  } catch {
+    setServerState(false);
+    const listener = document.getElementById('listener');
+    listener.textContent = 'obs offline';
+    listener.className = 'top-status local-only down';
+    renderBoard(false, null, []);
+  }
 }
+refreshQueue();
 setInterval(refreshQueue, 500);
 
 document.getElementById('skipLine').onclick = () => sendControl('skip');

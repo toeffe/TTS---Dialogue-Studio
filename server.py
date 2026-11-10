@@ -20,10 +20,15 @@ load_error = None
 loading = False
 sample_rate = 24000
 lock = threading.Lock()
-playback_lock = threading.Lock()
-playback_action = ""
+control_cv = threading.Condition()
+pending_action = ""
+control_gen = 0
+last_action = ""
+delivered_gen = 0
 queue_lock = threading.Lock()
 queue_state = {"playing": "", "queue": [], "at": 0.0}
+listener_note = True
+LISTENER_TTL = 8
 
 # Paradee v1.3 voice IDs. Each voice determines its language/accent.
 VOICES = {
@@ -50,46 +55,127 @@ def write_channel(name):
         CHANNEL_FILE.unlink()
     return name
 
-def take_playback():
-    global playback_action
-    with playback_lock:
-        action = playback_action
-        playback_action = ""
+def listener_is_live():
+    with queue_lock:
+        return queue_state["at"] > 0 and (time.time() - queue_state["at"]) < LISTENER_TTL
+
+def control_snapshot():
+    with control_cv:
+        return control_gen, last_action
+
+def take_playback(wait):
+    global pending_action, delivered_gen
+    with control_cv:
+        if wait and not pending_action:
+            control_cv.wait(20)
+        action = pending_action
+        pending_action = ""
+        if action:
+            delivered_gen = control_gen
         return action
 
+def claim_cancel(started):
+    global pending_action, delivered_gen
+    with control_cv:
+        if control_gen == started or delivered_gen == control_gen:
+            return ""
+        delivered_gen = control_gen
+        pending_action = ""
+        return last_action
+
 def set_playback(action):
-    global playback_action
+    global pending_action, control_gen, last_action
     action = str(action or "").strip().lower()
     if action not in ("stop", "skip"):
         raise ValueError("Use stop or skip.")
-    with playback_lock:
-        if playback_action != "stop":
-            playback_action = action
-        return playback_action
+    with control_cv:
+        control_gen += 1
+        if pending_action != "stop":
+            pending_action = action
+        last_action = pending_action
+        held = pending_action
+        control_cv.notify_all()
+    print("Stop." if held == "stop" else "Skip.", flush=True)
+    if not listener_is_live():
+        print("OBS source is not connected. Refresh that browser source.", flush=True)
+    return held
 
 def queue_view():
+    global listener_note
+    announce = False
     with queue_lock:
-        live = (time.time() - queue_state["at"]) < 5
-        return {
+        live = queue_state["at"] > 0 and (time.time() - queue_state["at"]) < LISTENER_TTL
+        if live:
+            listener_note = False
+        elif queue_state["at"] > 0 and not listener_note:
+            listener_note = True
+            announce = True
+        payload = {
             "playing": queue_state["playing"] if live else "",
             "queue": list(queue_state["queue"]) if live else [],
             "live": live,
+            "listener": live,
         }
+    if announce:
+        print("OBS source is not connected. Refresh that browser source.", flush=True)
+    return payload
+
+def clean_entry(item):
+    if item is None or item == "":
+        return None
+    if isinstance(item, str):
+        text = item.strip()[:180]
+        return {"name": "", "voice": "", "text": text} if text else None
+    if not isinstance(item, dict):
+        return None
+    name = str(item.get("name") or "").strip()[:40]
+    voice = str(item.get("voice") or "").strip()[:40]
+    text = str(item.get("text") or "").strip()[:180]
+    if not (name or voice or text):
+        return None
+    return {"name": name, "voice": voice, "text": text}
+
+def entry_label(item):
+    if not item:
+        return ""
+    who = item.get("name") or "Chat"
+    voice = item.get("voice") or ""
+    text = item.get("text") or ""
+    head = f"{who} ({voice})" if voice else who
+    return f"{head}: {text}" if text else head
 
 def set_queue_state(playing, items):
-    playing = str(playing or "")[:200]
+    global listener_note
+    playing = clean_entry(playing)
     if not isinstance(items, list):
         items = []
-    clean = [str(item)[:200] for item in items[:8]]
+    clean = []
+    for item in items[:40]:
+        entry = clean_entry(item)
+        if entry:
+            clean.append(entry)
     with queue_lock:
+        now = time.time()
+        was_live = queue_state["at"] > 0 and (now - queue_state["at"]) < LISTENER_TTL
         changed = queue_state["playing"] != playing or queue_state["queue"] != clean
         queue_state["playing"] = playing
         queue_state["queue"] = clean
-        queue_state["at"] = time.time()
-    if not changed:
-        return
-    print(f"Playing: {playing or '(idle)'}", flush=True)
-    print("Queue: " + (" | ".join(clean) if clean else "(empty)"), flush=True)
+        queue_state["at"] = now
+        if not was_live:
+            listener_note = False
+    if not was_live:
+        print("OBS source connected.", flush=True)
+    if changed or not was_live:
+        print(f"Playing: {entry_label(playing) or '(idle)'}", flush=True)
+        if not clean:
+            print("Queue: (empty)", flush=True)
+        else:
+            shown = clean[:12]
+            print("Queue:", flush=True)
+            for entry in shown:
+                print("  " + entry_label(entry), flush=True)
+            if len(clean) > len(shown):
+                print(f"  … +{len(clean) - len(shown)}", flush=True)
 
 def initialize():
     global tts, load_error, loading, sample_rate
@@ -200,11 +286,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Access-Control-Allow-Private-Network", "true")
-        self.send_header("Access-Control-Expose-Headers", "X-Paradee-Cues")
+        self.send_header("Access-Control-Expose-Headers", "X-Paradee-Cues, X-Paradee-Control")
         for key, value in (extra or {}).items():
             self.send_header(key, value)
         self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.wfile.write(data)
+        except ConnectionError:
+            pass
 
     def request_path(self):
         return urlparse(self.path).path
@@ -249,7 +338,8 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("JSON must be an object with text, or a string.")
         return one_line(raw.decode("utf-8"), first_value(q, "voice"), first_value(q, "speed"), first_value(q, "pause_ms"))
 
-    def serve_speech(self, segments, pause_ms):
+    def serve_speech(self, segments, pause_ms, cancelable=False):
+        started, _ = control_snapshot()
         try:
             wav, cues = synthesize(segments, pause_ms)
         except RuntimeError as exc:
@@ -259,6 +349,10 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:
             traceback.print_exc()
             return self.send_bytes(500, str(exc).encode("utf-8", "replace"), "text/plain; charset=utf-8")
+        if cancelable:
+            action = claim_cancel(started)
+            if action in ("stop", "skip"):
+                return self.send_bytes(204, b"", extra={"X-Paradee-Control": action})
         return self.send_bytes(200, wav, "audio/wav", {"X-Paradee-Cues": cues})
 
     def do_OPTIONS(self):
@@ -279,7 +373,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/channel":
             return self.send_bytes(200, json.dumps({"channel": read_channel()}).encode())
         if path == "/control":
-            return self.send_bytes(200, json.dumps({"action": take_playback()}).encode())
+            wait = first_value(self.query(), "wait") == "1"
+            return self.send_bytes(200, json.dumps({"action": take_playback(wait)}).encode())
         if path == "/queue":
             return self.send_bytes(200, json.dumps(queue_view()).encode())
         if path == "/voices.html":
@@ -337,9 +432,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_bytes(400, str(exc).encode("utf-8"), "text/plain; charset=utf-8")
         except json.JSONDecodeError as exc:
             return self.send_bytes(400, f"JSON could not be read: {exc.msg}.".encode("utf-8"), "text/plain; charset=utf-8")
-        return self.serve_speech(segments, pause_ms)
+        return self.serve_speech(segments, pause_ms, path == "/speak")
 
     def log_message(self, fmt, *args):
+        if self.path.split("?", 1)[0] in ("/queue", "/control", "/channel", "/health"):
+            return
         print("%s - %s" % (self.address_string(), fmt % args))
 
 if __name__ == "__main__":

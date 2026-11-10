@@ -33,7 +33,10 @@ let currentAudio = null;
 let speakAbort = null;
 let stopNow = false;
 let skipNow = false;
-let playingLabel = '';
+let playingJob = null;
+const QUEUE_LIMIT = 40;
+let clip = 0;
+let endClip = null;
 let socket = null;
 let reconnectTimer = null;
 
@@ -58,36 +61,53 @@ function unescapeTag(value) {
 }
 
 function playBlob(blob) {
+  const mine = ++clip;
   return new Promise(resolve => {
     const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    currentAudio = audio;
+    const audio = new Audio();
     let settled = false;
-    const done = () => {
+    const finish = () => {
       if (settled) return;
       settled = true;
+      audio.onended = null;
+      audio.onerror = null;
       if (currentAudio === audio) currentAudio = null;
+      if (endClip === finish) endClip = null;
+      audio.pause();
+      audio.removeAttribute('src');
+      try { audio.load(); } catch { /* the clip is already stopped */ }
       URL.revokeObjectURL(url);
       resolve();
     };
-    audio.onended = done;
-    audio.onerror = done;
-    audio.play().then(() => { soundBtn.hidden = true; }).catch(() => {
+    currentAudio = audio;
+    endClip = finish;
+    audio.onended = finish;
+    audio.onerror = finish;
+    if (mine !== clip || stopNow || skipNow) { finish(); return; }
+    audio.src = url;
+    audio.play().then(() => {
+      soundBtn.hidden = true;
+      if (mine !== clip || stopNow || skipNow) finish();
+    }).catch(() => {
       soundBtn.hidden = false;
-      done();
+      finish();
     });
   });
 }
 
 function haltAudio() {
-  const audio = currentAudio;
-  if (!audio) return;
-  audio.pause();
-  audio.dispatchEvent(new Event('ended'));
+  clip += 1;
+  const finish = endClip;
+  if (finish) finish();
+}
+
+function viewOf(job) {
+  if (!job) return null;
+  return {name: job.name || '', voice: job.voiceName || '', text: job.text || ''};
 }
 
 function reportQueue() {
-  const body = JSON.stringify({playing: playingLabel, queue: queue.map(job => job.label)});
+  const body = JSON.stringify({playing: viewOf(playingJob), queue: queue.map(viewOf)});
   fetch('/queue', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -96,6 +116,7 @@ function reportQueue() {
 }
 
 function requestSkip() {
+  if (!speaking) return;
   skipNow = true;
   if (speakAbort) speakAbort.abort();
   haltAudio();
@@ -104,12 +125,12 @@ function requestSkip() {
 }
 
 function requestStop() {
-  stopNow = true;
-  skipNow = false;
   queue.length = 0;
+  playingJob = null;
+  skipNow = false;
   if (speakAbort) speakAbort.abort();
-  playingLabel = '';
   haltAudio();
+  if (speaking) stopNow = true;
   setStatus('stopped');
   reportQueue();
 }
@@ -119,8 +140,9 @@ async function drain() {
   speaking = true;
   while (queue.length && !stopNow) {
     const job = queue.shift();
-    playingLabel = job.label;
+    playingJob = job;
     lastEl.textContent = job.label;
+    setStatus('playing');
     reportQueue();
     const ctrl = new AbortController();
     speakAbort = ctrl;
@@ -133,7 +155,20 @@ async function drain() {
       });
       if (stopNow) break;
       if (skipNow) { skipNow = false; continue; }
-      if (response.ok) await playBlob(await response.blob());
+      if (response.status === 204) {
+        if ((response.headers.get('X-Paradee-Control') || '') === 'stop') {
+          stopNow = true;
+          queue.length = 0;
+          playingJob = null;
+          break;
+        }
+        continue;
+      }
+      if (!response.ok) continue;
+      const blob = await response.blob();
+      if (stopNow) break;
+      if (skipNow) { skipNow = false; continue; }
+      await playBlob(blob);
     } catch { /* aborted or failed; the next line can still play */ }
     finally { if (speakAbort === ctrl) speakAbort = null; }
     if (stopNow) break;
@@ -144,15 +179,24 @@ async function drain() {
   skipNow = false;
   speaking = false;
   if (!queue.length) {
-    playingLabel = '';
+    playingJob = null;
     reportQueue();
+    setStatus(channel ? 'listening #' + channel : 'idle');
   }
   if (queue.length) drain();
 }
 
-function enqueue(text, voiceId, label) {
-  if (queue.length >= 3) queue.shift();
-  queue.push({text, voice: voiceId, label: label || text});
+function enqueue(text, voiceId, name) {
+  if (queue.length >= QUEUE_LIMIT) queue.shift();
+  const voiceName = VOICE_SAY[voiceId] || voiceId;
+  const who = name || 'Chat';
+  queue.push({
+    text,
+    voice: voiceId,
+    name: who,
+    voiceName,
+    label: who + ' (' + voiceName + '): ' + text
+  });
   reportQueue();
   drain();
 }
@@ -218,7 +262,7 @@ function handleLine(raw) {
   const request = ttsRequest(command[2] || '');
   if (!request) return;
   const name = unescapeTag(tags['display-name'] || match[1]);
-  enqueue(request.message, request.voice, name + ' (' + VOICE_SAY[request.voice] + '): ' + request.message);
+  enqueue(request.message, request.voice, name);
 }
 
 function connect() {
@@ -259,17 +303,23 @@ soundBtn.onclick = () => { soundBtn.hidden = true; drain(); };
 document.getElementById('skipLine').onclick = requestSkip;
 document.getElementById('stopLine').onclick = requestStop;
 
-async function pollControl() {
-  try {
-    const response = await fetch('/control', {cache: 'no-store'});
-    if (!response.ok) return;
-    const data = await response.json();
-    if (data.action === 'stop') requestStop();
-    else if (data.action === 'skip') requestSkip();
-  } catch { /* the buttons on this page still work */ }
+async function watchControl() {
+  for (;;) {
+    try {
+      const response = await fetch('/control?wait=1', {cache: 'no-store'});
+      if (!response.ok) throw new Error('control');
+      const data = await response.json();
+      if (data.action === 'stop') requestStop();
+      else if (data.action === 'skip') requestSkip();
+      else await new Promise(resolve => setTimeout(resolve, 200));
+    } catch {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
 }
-setInterval(pollControl, 300);
-setInterval(reportQueue, 2000);
+watchControl();
+reportQueue();
+setInterval(reportQueue, 1000);
 
 let refreshing = false;
 async function refreshChannel() {
