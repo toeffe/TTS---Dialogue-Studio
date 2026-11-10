@@ -222,7 +222,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.request_path()
         if path in ("/", "/index.html"):
-            return self.send_bytes(200, (HERE/"paradee_dialogue.html").read_bytes(), "text/html; charset=utf-8")
+            return self.send_bytes(200, (HERE/"index.html").read_bytes(), "text/html; charset=utf-8")
+        if path in ("/web/tts.js", "/web/misaki.js"):
+            return self.send_bytes(200, (HERE/path.lstrip("/")).read_bytes(), "text/javascript; charset=utf-8")
         if path == "/favicon.svg":
             return self.send_bytes(200, (HERE/"favicon.svg").read_bytes(), "image/svg+xml")
         if path == "/favicon.ico":

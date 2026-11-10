@@ -10,7 +10,7 @@ The first visit needs the internet. The page downloads the 8.5 MB Paradee model 
 
 ## Download (Windows x64)
 
-This path runs Paradee on the PC. Keep `start.bat`, `bootstrap.ps1`, `server.py`, and `paradee_dialogue.html` in one folder, then double-click `start.bat`.
+This path runs Paradee on the PC. Keep `start.bat`, `bootstrap.ps1`, `server.py`, and `index.html` in one folder, then double-click `start.bat`. The same studio page is used here and on the website. On this PC it sends speech to the local server. On the website it speaks in the browser, and switches to this PC when `start.bat` is running.
 
 The first launch needs the internet and can take several minutes. No system Python and no Git are required. The script downloads portable Python 3.10.11 into `.venv`, then installs Paradee 1.3 and the English spaCy model `en_core_web_sm`. The browser opens at http://127.0.0.1:8765 once the server is listening. The speech model downloads the first time the server starts.
 
