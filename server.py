@@ -154,6 +154,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
         self.send_header("Access-Control-Expose-Headers", "X-Paradee-Cues")
         for key, value in (extra or {}).items():
             self.send_header(key, value)
@@ -290,6 +291,7 @@ if __name__ == "__main__":
     threading.Thread(target=initialize, daemon=True).start()
     print(f"Listening at http://{HOST}:{PORT}", flush=True)
     print(f"Other programs: http://{HOST}:{PORT}/speak?text=Hello&voice=af_heart", flush=True)
+    print("Streaming TTS: https://paradee.t-tek.dev/voices.html", flush=True)
     print(f"Twitch chat: http://{HOST}:{PORT}/listen", flush=True)
     print('Chat command: !tts puck: hello', flush=True)
     httpd.serve_forever()

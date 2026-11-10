@@ -4,7 +4,7 @@ Dialogue studio for English, Hindi, French, and Spanish. Two ways to run it.
 
 ## Website
 
-Publish this folder with GitHub Pages. The site root is `index.html`. Speech runs in the visitor’s browser. Nothing is installed. Streaming TTS is not part of this website. It runs only in the downloaded app.
+Publish this folder with GitHub Pages. The site root is `index.html`. Speech runs in the visitor’s browser. Nothing is installed. https://paradee.t-tek.dev/voices.html lists the voices on its own. If `start.bat` is running on that PC, the same page turns into Streaming TTS and saves the channel to the local server.
 
 The first visit needs the internet. The page downloads the 8.5 MB Paradee model into this site’s browser cache, named `paradee-1.3`. It is not a file in Downloads. In Chrome that cache is under DevTools, Application, Cache Storage. Later visits reuse it. Clearing site data downloads it again. The page says when it is downloading, when it is using the saved copy, and which line it is speaking.
 

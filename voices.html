@@ -220,9 +220,18 @@ body:not(.local) .local-only { display: none; }
   </table>
 </div>
 <script>
-const local = location.hostname === '127.0.0.1' || location.hostname === 'localhost' || location.hostname === '[::1]';
-if (local) document.body.classList.add('local');
-else {
+const LOOPBACK = location.hostname === '127.0.0.1' || location.hostname === 'localhost' || location.hostname === '[::1]';
+const API = LOOPBACK ? '' : 'http://127.0.0.1:8765';
+
+function showStreaming() {
+  document.body.classList.add('local');
+  document.title = 'Streaming TTS';
+  document.getElementById('title').textContent = 'Streaming TTS';
+  document.getElementById('intro').textContent = 'Chat speaks one line. The name before the colon picks the voice for that line.';
+}
+
+function showVoices() {
+  document.body.classList.remove('local');
   document.title = 'Paradee — Voices';
   document.getElementById('title').textContent = 'Voices';
   document.getElementById('intro').textContent = 'These are the voices in the studio. The chat command in the last column is for a stream that runs the downloaded app.';
@@ -240,7 +249,7 @@ function remember(name) {
   try { localStorage.setItem(channelKey, name); } catch { /* the server copy is the one OBS uses */ }
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    fetch('/channel', {
+    fetch(API + '/channel', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({channel: name})
@@ -251,7 +260,7 @@ function remember(name) {
 async function loadChannel() {
   let name = '';
   try {
-    const response = await fetch('/channel', {cache: 'no-store'});
+    const response = await fetch(API + '/channel', {cache: 'no-store'});
     if (response.ok) name = cleanChannel((await response.json()).channel);
   } catch { /* use the browser copy below */ }
   if (!name) {
@@ -261,9 +270,31 @@ async function loadChannel() {
   if (name) channelInput.value = name;
 }
 
-if (local) {
+function wireChannel() {
   channelInput.addEventListener('input', () => remember(cleanChannel(channelInput.value)));
   loadChannel();
+}
+
+async function localServerRunning() {
+  if (LOOPBACK) return true;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 800);
+  try {
+    const response = await fetch(API + '/channel', {cache: 'no-store', signal: ctrl.signal});
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+if (LOOPBACK) {
+  showStreaming();
+  wireChannel();
+} else {
+  showVoices();
+  localServerRunning().then(ok => { if (ok) { showStreaming(); wireChannel(); } });
 }
 </script>
 </body>
