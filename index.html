@@ -414,6 +414,7 @@ audio {
     <button type="button" class="ghost" id="loadExample">Example</button>
     <button type="button" class="ghost" id="loadJson">Import JSON</button>
     <button type="button" class="ghost" id="exportJson">Export JSON</button>
+    <button type="button" class="ghost" id="aiInstructions">AI Instructions</button>
     <div class="grow"></div>
     <button type="button" class="ghost" id="stop" disabled>Stop</button>
     <button type="button" class="primary" id="generate">Generate</button>
@@ -572,6 +573,63 @@ function loadFromText(raw){
   try { applyConversation(JSON.parse(raw)); }
   catch(e){ status('Could not load JSON: '+e.message,'error'); }
 }
+const AI_INSTRUCTIONS=`You are writing a conversation for Paradee Dialogue Studio. Do not write the .json file yet. First ask what the user wants: who is talking, what the scene is about, which languages, how long it should be, and any tone or outcome. Wait for the answer. Only then create one .json file and do not paste the JSON into the chat. Name the file from the scene title, lowercase, with hyphens, ending in .json. The user loads that file with Import JSON. The page then speaks every line, in order, as one WAV file.
+
+Write speakable dialogue only. No stage directions, no markdown, no narration labels inside the text. Each line is one turn by one speaker. Give each character one voice and keep it. Write each line in the language of its voice.
+
+Voices, use the id exactly:
+- af_heart: Heart, English (US). Warm.
+- am_puck: Puck, English (US). Brighter.
+- bf_isabella: Isabella, English (UK).
+- bm_fable: Fable, English (UK).
+- hf_alpha: Alpha, Hindi. Write the line in Hindi.
+- hm_omega: Omega, Hindi. Write the line in Hindi.
+- ff_siwis: Siwis, French. Write the line in French.
+- em_alex: Alex, Spanish. Write the line in Spanish.
+
+Rules:
+- 1 to 200 lines. Skip empty lines.
+- pause_ms is the silence between lines, from 0 to 5000. 350 is a normal beat. Use less for quick back-and-forth, more for a held pause.
+- speed is how fast the whole conversation is spoken, from 0.5 to 2. 1 is normal. One speed for every line.
+- title is a short name for the scene.
+- speaker is the character's name. voice is one id from the list. text is what they say.
+- Before the file exists, the reply is only the questions. After the user answers, the whole reply is the .json file. No explanation before or after it.
+
+Shape:
+{
+  "title": "Scene name",
+  "pause_ms": 350,
+  "speed": 1,
+  "segments": [
+    {"speaker": "Ava", "voice": "af_heart", "text": "We should leave before the rain starts."},
+    {"speaker": "Luis", "voice": "em_alex", "text": "Dame un minuto. Busco las llaves."}
+  ]
+}`;
+function copyText(text){
+  const area=document.createElement('textarea');
+  area.value=text;
+  area.setAttribute('readonly','');
+  area.style.position='fixed';
+  area.style.left='-9999px';
+  document.body.appendChild(area);
+  area.select();
+  let ok=false;
+  try { ok=document.execCommand('copy'); } catch { ok=false; }
+  area.remove();
+  return ok;
+}
+$('aiInstructions').onclick=async()=>{
+  if(copyText(AI_INSTRUCTIONS)){
+    status('AI instructions copied','ok');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(AI_INSTRUCTIONS);
+    status('AI instructions copied','ok');
+  } catch {
+    status('Could not copy. Select the instructions and copy them manually.','error');
+  }
+};
 $('loadExample').onclick=()=>applyConversation(EXAMPLE_JSON);
 $('loadJson').onclick=()=>{
   const choice=window.prompt('Paste JSON, or leave blank to choose a file:','');
