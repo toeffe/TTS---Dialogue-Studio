@@ -134,6 +134,35 @@ body:not(.local) .local-only { display: none; }
   border-radius: var(--radius);
 }
 .channel input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.guide { margin: 0 0 calc(var(--space) * 3); }
+.guide summary {
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text);
+  list-style: none;
+}
+.guide summary::-webkit-details-marker { display: none; }
+.guide summary::before { content: '▸  '; color: var(--text-faint); font-family: var(--mono); }
+.guide[open] summary::before { content: '▾  '; }
+.guide .steps { margin-top: 8px; }
+.live { margin: 0 0 calc(var(--space) * 2); font-size: 14px; }
+.live p { margin: 0 0 4px; }
+.live .k { display: inline-block; width: 4.5em; color: var(--text-faint); font-family: var(--mono); font-size: 12px; }
+.controls { display: flex; gap: 8px; margin: 0 0 calc(var(--space) * 3); }
+.controls button {
+  min-height: 36px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 13px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.controls button:hover { background: var(--surface); color: var(--text); }
+.controls button.stop { color: #FF6961; border-color: rgba(255,105,97,0.7); }
+.controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .url {
   margin: 0 0 calc(var(--space) * 4);
   padding: 10px 12px;
@@ -193,16 +222,27 @@ body:not(.local) .local-only { display: none; }
     <strong>The Paradee server is not running on this PC.</strong>
     Double-click start.bat and leave that window open, then reload this page. The channel field and the OBS address show up here. Speech still runs on this computer.
   </aside>
-  <ol class="steps local-only">
-    <li>Double-click <code>start.bat</code> and leave that window open.</li>
-    <li>In OBS, add a Browser Source with the address below. Check “Control audio via OBS”.</li>
-    <li>Keep that source in the scene. Slide it off the canvas if the small status line should stay off stream.</li>
-    <li>In chat, type <code>!tts puck: hello chat</code>.</li>
-  </ol>
+  <details class="guide local-only" id="guide" open>
+    <summary>Setup</summary>
+    <ol class="steps">
+      <li>Double-click <code>start.bat</code> and leave that window open.</li>
+      <li>In OBS, add a Browser Source with the address below. Check “Control audio via OBS”.</li>
+      <li>Keep that source in the scene. Slide it off the canvas if the small status line should stay off stream.</li>
+      <li>In chat, type <code>!tts puck: hello chat</code>.</li>
+    </ol>
+  </details>
   <label class="channel local-only">Twitch channel
     <input id="channel" placeholder="channel name" spellcheck="false" autocomplete="off">
   </label>
   <p class="url local-only">http://127.0.0.1:8765/listen</p>
+  <section class="live local-only" id="live" aria-live="polite">
+    <p><span class="k">Playing</span> <span id="nowPlaying">Idle</span></p>
+    <p><span class="k">Queue</span> <span id="queueList">Empty</span></p>
+  </section>
+  <div class="controls local-only">
+    <button type="button" id="skipLine">Skip</button>
+    <button type="button" id="stopLine" class="stop">Stop</button>
+  </div>
   <table class="voices">
     <thead>
       <tr><th>Voice</th><th>Language</th><th>Chat</th></tr>
@@ -269,6 +309,38 @@ async function loadChannel() {
   }
   if (name) channelInput.value = name;
 }
+
+function sendControl(action) {
+  fetch(API + '/control', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({action})
+  }).catch(() => {});
+}
+const guide = document.getElementById('guide');
+const guideKey = 'streaming-tts-guide';
+try {
+  if (localStorage.getItem(guideKey) === 'closed') guide.open = false;
+} catch { /* leave the guide open */ }
+guide.addEventListener('toggle', () => {
+  try { localStorage.setItem(guideKey, guide.open ? 'open' : 'closed'); } catch { /* the click still folds the guide */ }
+});
+
+async function refreshQueue() {
+  if (!document.body.classList.contains('local')) return;
+  try {
+    const response = await fetch(API + '/queue', {cache: 'no-store'});
+    if (!response.ok) return;
+    const data = await response.json();
+    document.getElementById('nowPlaying').textContent = data.live && data.playing ? data.playing : 'Idle';
+    const items = data.live && Array.isArray(data.queue) ? data.queue : [];
+    document.getElementById('queueList').textContent = items.length ? items.join(' · ') : 'Empty';
+  } catch { /* the listener may still be starting */ }
+}
+setInterval(refreshQueue, 500);
+
+document.getElementById('skipLine').onclick = () => sendControl('skip');
+document.getElementById('stopLine').onclick = () => sendControl('stop');
 
 function wireChannel() {
   channelInput.addEventListener('input', () => remember(cleanChannel(channelInput.value)));

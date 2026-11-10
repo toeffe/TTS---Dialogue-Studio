@@ -9,12 +9,18 @@
   body { padding: 8px 10px; }
   #status { font-family: ui-monospace, Consolas, monospace; font-size: 12px; opacity: 0.8; }
   #last { margin-top: 6px; }
-  button { margin-top: 8px; }
+  #controls { display: flex; gap: 8px; }
+  button { margin-top: 8px; background: transparent; color: inherit; border: 1px solid rgba(245,245,247,0.35); border-radius: 8px; padding: 4px 10px; }
+  #stopLine { color: #FF6961; border-color: rgba(255,105,97,0.7); }
 </style>
 </head>
 <body>
 <div id="status">starting</div>
 <div id="last"></div>
+<div id="controls">
+  <button type="button" id="skipLine">Skip</button>
+  <button type="button" id="stopLine">Stop</button>
+</div>
 <button type="button" id="sound" hidden>Allow sound</button>
 <script>
 const statusEl = document.getElementById('status');
@@ -23,6 +29,11 @@ const soundBtn = document.getElementById('sound');
 const queue = [];
 let channel = '';
 let speaking = false;
+let currentAudio = null;
+let speakAbort = null;
+let stopNow = false;
+let skipNow = false;
+let playingLabel = '';
 let socket = null;
 let reconnectTimer = null;
 
@@ -50,7 +61,15 @@ function playBlob(blob) {
   return new Promise(resolve => {
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
-    const done = () => { URL.revokeObjectURL(url); resolve(); };
+    currentAudio = audio;
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      if (currentAudio === audio) currentAudio = null;
+      URL.revokeObjectURL(url);
+      resolve();
+    };
     audio.onended = done;
     audio.onerror = done;
     audio.play().then(() => { soundBtn.hidden = true; }).catch(() => {
@@ -60,27 +79,81 @@ function playBlob(blob) {
   });
 }
 
+function haltAudio() {
+  const audio = currentAudio;
+  if (!audio) return;
+  audio.pause();
+  audio.dispatchEvent(new Event('ended'));
+}
+
+function reportQueue() {
+  const body = JSON.stringify({playing: playingLabel, queue: queue.map(job => job.label)});
+  fetch('/queue', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body
+  }).catch(() => {});
+}
+
+function requestSkip() {
+  skipNow = true;
+  if (speakAbort) speakAbort.abort();
+  haltAudio();
+  setStatus('skipped');
+  reportQueue();
+}
+
+function requestStop() {
+  stopNow = true;
+  skipNow = false;
+  queue.length = 0;
+  if (speakAbort) speakAbort.abort();
+  playingLabel = '';
+  haltAudio();
+  setStatus('stopped');
+  reportQueue();
+}
+
 async function drain() {
   if (speaking) return;
   speaking = true;
-  while (queue.length) {
+  while (queue.length && !stopNow) {
     const job = queue.shift();
+    playingLabel = job.label;
     lastEl.textContent = job.label;
+    reportQueue();
+    const ctrl = new AbortController();
+    speakAbort = ctrl;
     try {
       const response = await fetch('/speak', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({text: job.text, voice: job.voice})
+        body: JSON.stringify({text: job.text, voice: job.voice}),
+        signal: ctrl.signal
       });
+      if (stopNow) break;
+      if (skipNow) { skipNow = false; continue; }
       if (response.ok) await playBlob(await response.blob());
-    } catch { /* keep the next line moving */ }
+    } catch { /* aborted or failed; the next line can still play */ }
+    finally { if (speakAbort === ctrl) speakAbort = null; }
+    if (stopNow) break;
+    if (skipNow) skipNow = false;
   }
+  if (stopNow) queue.length = 0;
+  stopNow = false;
+  skipNow = false;
   speaking = false;
+  if (!queue.length) {
+    playingLabel = '';
+    reportQueue();
+  }
+  if (queue.length) drain();
 }
 
 function enqueue(text, voiceId, label) {
   if (queue.length >= 3) queue.shift();
   queue.push({text, voice: voiceId, label: label || text});
+  reportQueue();
   drain();
 }
 
@@ -183,6 +256,20 @@ handleLine = raw => {
 };
 
 soundBtn.onclick = () => { soundBtn.hidden = true; drain(); };
+document.getElementById('skipLine').onclick = requestSkip;
+document.getElementById('stopLine').onclick = requestStop;
+
+async function pollControl() {
+  try {
+    const response = await fetch('/control', {cache: 'no-store'});
+    if (!response.ok) return;
+    const data = await response.json();
+    if (data.action === 'stop') requestStop();
+    else if (data.action === 'skip') requestSkip();
+  } catch { /* the buttons on this page still work */ }
+}
+setInterval(pollControl, 300);
+setInterval(reportQueue, 2000);
 
 let refreshing = false;
 async function refreshChannel() {

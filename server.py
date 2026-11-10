@@ -3,7 +3,7 @@
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
-import base64, io, json, re, sys, threading, traceback, wave
+import base64, io, json, re, sys, threading, time, traceback, wave
 
 try:
     sys.stdout.reconfigure(line_buffering=True)
@@ -20,6 +20,10 @@ load_error = None
 loading = False
 sample_rate = 24000
 lock = threading.Lock()
+playback_lock = threading.Lock()
+playback_action = ""
+queue_lock = threading.Lock()
+queue_state = {"playing": "", "queue": [], "at": 0.0}
 
 # Paradee v1.3 voice IDs. Each voice determines its language/accent.
 VOICES = {
@@ -45,6 +49,47 @@ def write_channel(name):
     elif CHANNEL_FILE.exists():
         CHANNEL_FILE.unlink()
     return name
+
+def take_playback():
+    global playback_action
+    with playback_lock:
+        action = playback_action
+        playback_action = ""
+        return action
+
+def set_playback(action):
+    global playback_action
+    action = str(action or "").strip().lower()
+    if action not in ("stop", "skip"):
+        raise ValueError("Use stop or skip.")
+    with playback_lock:
+        if playback_action != "stop":
+            playback_action = action
+        return playback_action
+
+def queue_view():
+    with queue_lock:
+        live = (time.time() - queue_state["at"]) < 5
+        return {
+            "playing": queue_state["playing"] if live else "",
+            "queue": list(queue_state["queue"]) if live else [],
+            "live": live,
+        }
+
+def set_queue_state(playing, items):
+    playing = str(playing or "")[:200]
+    if not isinstance(items, list):
+        items = []
+    clean = [str(item)[:200] for item in items[:8]]
+    with queue_lock:
+        changed = queue_state["playing"] != playing or queue_state["queue"] != clean
+        queue_state["playing"] = playing
+        queue_state["queue"] = clean
+        queue_state["at"] = time.time()
+    if not changed:
+        return
+    print(f"Playing: {playing or '(idle)'}", flush=True)
+    print("Queue: " + (" | ".join(clean) if clean else "(empty)"), flush=True)
 
 def initialize():
     global tts, load_error, loading, sample_rate
@@ -233,6 +278,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_bytes(200, (HERE/"listen.html").read_bytes(), "text/html; charset=utf-8")
         if path == "/channel":
             return self.send_bytes(200, json.dumps({"channel": read_channel()}).encode())
+        if path == "/control":
+            return self.send_bytes(200, json.dumps({"action": take_playback()}).encode())
+        if path == "/queue":
+            return self.send_bytes(200, json.dumps(queue_view()).encode())
         if path == "/voices.html":
             return self.send_bytes(200, (HERE/"voices.html").read_bytes(), "text/html; charset=utf-8")
         if path == "/health":
@@ -263,6 +312,18 @@ class Handler(BaseHTTPRequestHandler):
                     name = data.get("channel", "")
                 name = write_channel(name)
                 return self.send_bytes(200, json.dumps({"channel": name}).encode())
+            if path == "/control":
+                data = json.loads(self.read_body() or b"{}")
+                if not isinstance(data, dict):
+                    raise ValueError("JSON must be an object.")
+                action = set_playback(data.get("action", ""))
+                return self.send_bytes(200, json.dumps({"action": action}).encode())
+            if path == "/queue":
+                data = json.loads(self.read_body() or b"{}")
+                if not isinstance(data, dict):
+                    raise ValueError("JSON must be an object.")
+                set_queue_state(data.get("playing", ""), data.get("queue", []))
+                return self.send_bytes(200, json.dumps(queue_view()).encode())
             if path == "/speak":
                 segments, pause_ms = self.parse_speak()
             elif path == "/dialogue":
