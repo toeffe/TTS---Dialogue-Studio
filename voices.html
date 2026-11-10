@@ -81,6 +81,17 @@ a.ghost:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   margin-bottom: 6px;
 }
 .page-title p { font-size: 14px; color: var(--text-muted); max-width: 42em; }
+.notice {
+  margin: 0 0 calc(var(--space) * 3);
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 69, 58, 0.8);
+  border-radius: var(--radius);
+  background: rgba(255, 69, 58, 0.14);
+  font-size: 15px;
+}
+.notice strong { display: block; margin-bottom: 4px; color: #FF6961; }
+body.local .notice { display: none; }
+body:not(.local) .local-only { display: none; }
 .steps {
   margin: 0 0 calc(var(--space) * 3);
   padding: 0;
@@ -175,19 +186,23 @@ a.ghost:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
     <a class="ghost" href="index.html">Studio</a>
   </header>
   <div class="page-title">
-    <h1>Streaming TTS</h1>
-    <p>Chat speaks one line. The name before the colon picks the voice for that line.</p>
+    <h1 id="title">Streaming TTS</h1>
+    <p id="intro">Chat speaks one line. The name before the colon picks the voice for that line.</p>
   </div>
-  <ol class="steps">
+  <aside class="notice">
+    <strong>Streaming TTS is only in the downloaded app.</strong>
+    This website speaks lines in your browser. It does not listen to Twitch, and OBS cannot use this page. Download the Windows version, then open Streaming TTS there.
+  </aside>
+  <ol class="steps local-only">
     <li>Double-click <code>start.bat</code> and leave that window open.</li>
     <li>In OBS, add a Browser Source with the address below. Check “Control audio via OBS”.</li>
     <li>Keep that source in the scene. Slide it off the canvas if the small status line should stay off stream.</li>
     <li>In chat, type <code>!tts puck: hello chat</code>.</li>
   </ol>
-  <label class="channel">Twitch channel
+  <label class="channel local-only">Twitch channel
     <input id="channel" placeholder="channel name" spellcheck="false" autocomplete="off">
   </label>
-  <p class="url">http://127.0.0.1:8765/listen</p>
+  <p class="url local-only">http://127.0.0.1:8765/listen</p>
   <table class="voices">
     <thead>
       <tr><th>Voice</th><th>Language</th><th>Chat</th></tr>
@@ -205,6 +220,14 @@ a.ghost:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   </table>
 </div>
 <script>
+const local = location.hostname === '127.0.0.1' || location.hostname === 'localhost' || location.hostname === '[::1]';
+if (local) document.body.classList.add('local');
+else {
+  document.title = 'Paradee — Voices';
+  document.getElementById('title').textContent = 'Voices';
+  document.getElementById('intro').textContent = 'These are the voices in the studio. The chat command in the last column is for a stream that runs the downloaded app.';
+}
+
 const channelInput = document.getElementById('channel');
 const channelKey = 'streaming-tts-channel';
 let saveTimer = null;
@@ -238,8 +261,10 @@ async function loadChannel() {
   if (name) channelInput.value = name;
 }
 
-channelInput.addEventListener('input', () => remember(cleanChannel(channelInput.value)));
-loadChannel();
+if (local) {
+  channelInput.addEventListener('input', () => remember(cleanChannel(channelInput.value)));
+  loadChannel();
+}
 </script>
 </body>
 </html>
