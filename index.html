@@ -157,6 +157,7 @@ button.icon:not(:disabled):hover {
 button.icon.danger:not(:disabled):hover { color: var(--danger); background: rgba(255,69,58,0.12); }
 
 .script {
+  margin-top: calc(var(--space) * 3);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
   background: var(--surface);
@@ -269,10 +270,9 @@ button.icon.danger:not(:disabled):hover { color: var(--danger); background: rgba
   gap: 12px;
 }
 #status {
-  font-size: 13px;
-  color: var(--text-faint);
-  font-family: var(--mono);
-  min-height: 1.2em;
+  font-size: 14px;
+  color: var(--text);
+  min-height: 1.4em;
 }
 #status.ok { color: var(--primary); }
 #status.error { color: var(--danger); }
@@ -298,7 +298,7 @@ progress::-moz-progress-bar { background: var(--primary); }
 /* Result */
 .result {
   display: none;
-  margin-top: calc(var(--space) * 3);
+  margin-top: calc(var(--space) * 2);
   padding: 16px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
@@ -332,9 +332,7 @@ audio {
 
 /* Defaults */
 .defaults {
-  margin-top: calc(var(--space) * 4);
-  padding-top: calc(var(--space) * 3);
-  border-top: 1px solid var(--border-subtle);
+  margin-top: calc(var(--space) * 2);
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
@@ -422,19 +420,6 @@ audio {
   </div>
   <input type="file" id="jsonFile" accept=".json,application/json" hidden>
 
-  <div class="script" id="segments" role="list"></div>
-
-  <div class="feedback">
-    <div id="status" role="status" aria-live="polite"></div>
-  </div>
-  <progress id="progress" value="0" max="100" hidden></progress>
-
-  <div id="result" class="result">
-    <div class="result-label">Output</div>
-    <audio id="player" controls></audio>
-    <a id="download" class="download" download="paradee-dialogue.wav">Download WAV</a>
-  </div>
-
   <div class="defaults">
     <div>
       <label for="defaultSpeed">Speaking speed</label>
@@ -445,6 +430,19 @@ audio {
       <input id="pause" type="number" min="0" max="5000" step="50" value="350">
     </div>
   </div>
+
+  <div id="result" class="result">
+    <div class="result-label">Output</div>
+    <audio id="player" controls></audio>
+    <a id="download" class="download" download="paradee-dialogue.wav">Download WAV</a>
+  </div>
+
+  <div class="feedback">
+    <div id="status" role="status" aria-live="polite"></div>
+  </div>
+  <progress id="progress" value="0" max="100" hidden></progress>
+
+  <div class="script" id="segments" role="list"></div>
 
   <p class="site-foot">
     runs in this browser
@@ -613,14 +611,29 @@ function engineStatus(s,kind=''){
   $('engineStatus').className=kind||'';
 }
 let engine=null;
+function showProgress(value){
+  if(value==null){ $('progress').hidden=true; return; }
+  $('progress').hidden=false;
+  $('progress').value=value;
+}
 async function boot(){
   $('generate').disabled=true;
-  engineStatus('loading model…');
+  showProgress(0);
+  engineStatus('loading…');
   try {
-    engine=await loadEngine(msg=>engineStatus(msg));
-    engineStatus('ready','ok');
+    engine=await loadEngine(({text,progress})=>{
+      engineStatus(progress==null?'loading…':`downloading ${progress}%`);
+      status(text);
+      showProgress(progress);
+    });
+    showProgress(null);
+    engineStatus(engine.fromCache?'saved in this browser':'ready','ok');
+    status(engine.fromCache
+      ?'Ready. Using the model already saved in this browser.'
+      :'Ready. The model is now saved in this browser.','ok');
     $('generate').disabled=false;
   } catch(e) {
+    showProgress(null);
     engineStatus('model failed','error');
     status(e.message,'error');
   }
@@ -631,8 +644,6 @@ async function runDialogue(){
   if(!engine){ status('The model is still loading','error'); return; }
   $('generate').disabled=true;
   $('stop').disabled=false;
-  $('progress').hidden=false;
-  $('progress').value=0;
   $('result').style.display='none';
   try {
     const segments=active.map(l=>({
@@ -640,10 +651,12 @@ async function runDialogue(){
       speed:Number($('defaultSpeed').value)||1
     }));
     const pause=Math.max(0,Math.min(5000,Number($('pause').value)||0));
-    status('Synthesizing…');
+    engineStatus('speaking…');
+    status(`Speaking line 1 of ${active.length}…`);
+    showProgress(0);
     const blob=await synthesize(engine, segments, pause, (done,total)=>{
-      $('progress').value=Math.round(done/total*100);
-      status(`Synthesizing ${done}/${total}`);
+      showProgress(Math.round(done/total*100));
+      status(`Speaking line ${done} of ${total}…`);
     });
     if(!blob.size) throw Error('Empty audio');
     if(audioUrl) URL.revokeObjectURL(audioUrl);
@@ -651,10 +664,13 @@ async function runDialogue(){
     $('player').src=audioUrl;
     $('download').href=audioUrl;
     $('result').style.display='block';
-    $('progress').value=100;
-    status(`Done · ${active.length} lines`,'ok');
+    showProgress(null);
+    engineStatus(engine.fromCache?'saved in this browser':'ready','ok');
+    status(`Done. ${active.length} ${active.length===1?'line':'lines'} spoken.`,'ok');
     $('player').play().catch(()=>{});
   } catch(e) {
+    showProgress(null);
+    engineStatus('ready','ok');
     status('Failed: '+e.message,'error');
   } finally {
     $('generate').disabled=false;
@@ -664,7 +680,8 @@ async function runDialogue(){
 $('generate').onclick=()=>runDialogue();
 $('stop').onclick=()=>{ $('player').pause(); $('player').currentTime=0; };
 
-applyConversation(EXAMPLE_JSON);
+lines.push({id:nextId++,speaker:'Speaker 1',voice:'af_heart',text:'',speed:null});
+render();
 boot();
 </script>
 </body>

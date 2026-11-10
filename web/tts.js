@@ -30,15 +30,38 @@ const E2M_OTHER = [
 ort.env.wasm.numThreads = 1;
 ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/';
 
-async function cached(url) {
+async function cached(url, onBytes) {
   const cache = await caches.open(CACHE);
-  let response = await cache.match(url);
-  if (!response) {
-    response = await fetch(url);
-    if (!response.ok) throw new Error(`Download failed (${response.status})`);
-    await cache.put(url, response.clone());
+  const hit = await cache.match(url);
+  if (hit) return { buffer: await hit.arrayBuffer(), fromCache: true };
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Download failed (${response.status})`);
+  const total = Number(response.headers.get('Content-Length')) || 0;
+  const reader = response.body && response.body.getReader();
+  if (!reader) {
+    const buffer = await response.arrayBuffer();
+    await cache.put(url, new Response(buffer.slice(0)));
+    return { buffer, fromCache: false };
   }
-  return response.arrayBuffer();
+  const chunks = [];
+  let received = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.byteLength;
+    if (onBytes) onBytes(received, total);
+  }
+  const bytes = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  await cache.put(url, new Response(bytes.slice(0), {
+    headers: { 'Content-Type': response.headers.get('Content-Type') || 'application/octet-stream' },
+  }));
+  return { buffer: bytes.buffer, fromCache: false };
 }
 
 function sentences(text) {
@@ -157,15 +180,31 @@ export function encodeWav(samples, sampleRate) {
 }
 
 export async function loadEngine(onStatus) {
-  onStatus('loading phonemes…');
-  const espeak = await createEspeak({ cdn: 'jsdelivr', languages: ['en', 'hi', 'fr', 'es'] });
-  onStatus('loading model…');
-  const [configBytes, modelBytes] = await Promise.all([cached(CONFIG_URL), cached(MODEL_URL)]);
-  const config = JSON.parse(new TextDecoder().decode(configBytes));
-  const session = await ort.InferenceSession.create(modelBytes, { executionProviders: ['wasm'] });
+  const report = (text, progress) => onStatus({ text, progress });
+  report('Loading voices…');
+  const espeakPromise = createEspeak({ cdn: 'jsdelivr', languages: ['en', 'hi', 'fr', 'es'] });
+  const configPromise = cached(CONFIG_URL);
+  const espeak = await espeakPromise;
+  const hadModel = Boolean(await (await caches.open(CACHE)).match(MODEL_URL));
+  report(
+    hadModel
+      ? 'Loading the speech model already saved in this browser…'
+      : 'Downloading the speech model, about 8.5 MB. It is saved in this browser, not as a file.',
+    hadModel ? undefined : 0,
+  );
+  const model = await cached(MODEL_URL, (got, total) => {
+    if (!total) return;
+    const pct = Math.round(got / total * 100);
+    report(`Downloading the speech model, ${pct}%. It is saved in this browser, not as a file.`, pct);
+  });
+  report('Starting the model…');
+  const configBytes = await configPromise;
+  const config = JSON.parse(new TextDecoder().decode(configBytes.buffer));
+  const session = await ort.InferenceSession.create(model.buffer, { executionProviders: ['wasm'] });
   return {
     espeak, session, config,
     sampleRate: config.sample_rate || 24000,
+    fromCache: model.fromCache,
   };
 }
 
