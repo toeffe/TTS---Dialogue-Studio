@@ -136,18 +136,18 @@ function concat(parts) {
   return joined;
 }
 
-function joinLines(lines, pauseSamples) {
+function joinLines(lines, pauses) {
   let total = 0;
   for (let i = 0; i < lines.length; i++) {
     total += lines[i].length;
-    if (i !== lines.length - 1) total += pauseSamples;
+    if (i !== lines.length - 1) total += pauses[i];
   }
   const joined = new Float32Array(total);
   let offset = 0;
   for (let i = 0; i < lines.length; i++) {
     joined.set(lines[i], offset);
     offset += lines[i].length;
-    if (i !== lines.length - 1) offset += pauseSamples;
+    if (i !== lines.length - 1) offset += pauses[i];
   }
   return joined;
 }
@@ -196,7 +196,7 @@ export async function loadEngine(onStatus) {
   const model = await cached(MODEL_URL, (got, total) => {
     if (!total) return;
     const pct = Math.round(got / total * 100);
-    report(`Downloading the speech model, ${pct}%. It is saved in this browser, not as a file.`, pct);
+    report('Downloading the speech model. It is saved in this browser, not as a file.', pct);
   });
   report('Starting the model…');
   const configBytes = await configPromise;
@@ -209,25 +209,50 @@ export async function loadEngine(onStatus) {
   };
 }
 
-export async function synthesize(engine, segments, pauseMs, onProgress) {
+function stopError() {
+  const error = new Error('Stopped.');
+  error.cancelled = true;
+  return error;
+}
+
+export async function synthesize(engine, segments, onProgress, signal) {
   const { espeak, session, config, sampleRate } = engine;
   const lines = [];
   for (let i = 0; i < segments.length; i++) {
-    if (onProgress) onProgress(i, segments.length);
-    await new Promise(resolve => setTimeout(resolve, 30));
     const segment = segments[i];
     const voice = segment.voice in LANG ? segment.voice : 'af_heart';
     const speed = Math.max(0.5, Math.min(2, Number(segment.speed) || 1));
     const voiceIndex = Math.max(0, config.voices.indexOf(voice));
-    const pieces = [];
+    const jobs = [];
     for (const sentence of sentences(segment.text)) {
       const phonemes = phonemize(espeak, sentence, voice);
-      for (const piece of chunks(phonemes)) pieces.push(await runChunk(session, tokenIds(piece, config.vocab), speed, voiceIndex));
+      for (const piece of chunks(phonemes)) jobs.push(piece);
     }
-    if (pieces.length) lines.push(concat(pieces));
+    const steps = Math.max(1, jobs.length);
+    const pieces = [];
+    for (let step = 0; step < steps; step++) {
+      if (signal && signal.cancelled) throw stopError();
+      if (onProgress) onProgress(i + step / steps, segments.length);
+      await new Promise(resolve => setTimeout(resolve, 30));
+      if (signal && signal.cancelled) throw stopError();
+      if (jobs[step]) pieces.push(await runChunk(session, tokenIds(jobs[step], config.vocab), speed, voiceIndex));
+    }
+    lines.push(pieces.length ? concat(pieces) : new Float32Array(0));
   }
+  if (signal && signal.cancelled) throw stopError();
   if (onProgress) onProgress(segments.length, segments.length);
-  if (!lines.length) throw new Error('No audio was generated.');
-  const pauseSamples = Math.max(0, Math.round(sampleRate * pauseMs / 1000));
-  return encodeWav(joinLines(lines, pauseSamples), sampleRate);
+  if (!lines.some(part => part.length)) throw new Error('No audio was generated.');
+  const pauses = lines.map((_, index) => {
+    const ms = Math.max(0, Math.min(5000, Number(segments[index] && segments[index].pause) || 0));
+    return Math.round(sampleRate * ms / 1000);
+  });
+  const cues = [];
+  let cursor = 0;
+  lines.forEach((part, index) => {
+    const start = cursor / sampleRate;
+    cursor += part.length;
+    cues.push({ start, end: cursor / sampleRate });
+    if (index !== lines.length - 1) cursor += pauses[index];
+  });
+  return { blob: encodeWav(joinLines(lines, pauses), sampleRate), cues };
 }
