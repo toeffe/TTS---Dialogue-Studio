@@ -30,9 +30,9 @@ Twitch chat in OBS stays on the popout. Speech is a second Browser Source:
 http://127.0.0.1:8765/listen
 ```
 
-Turn on “Control audio via OBS” for that source. Ordinary chat stays quiet. A viewer speaks one line with `!tts puck: hello chat`. The name before the colon picks the voice for that line. A cue by itself needs no voice: `!tts (bark)`.
+Turn on “Control audio via OBS” for that source. Ordinary chat stays quiet. A viewer speaks one line with `!tts puck: hello chat`. The name before the colon picks the voice for that line.
 
-Chat plays a sound only after it is approved. A new id is saved under **Saved, not in chat** and does not play until you approve it. **Play** previews a saved sound. Clicking the id or the name copies the id. **Copy panel list** copies markdown for a Twitch About panel. Paste a MyInstants page link into **Add**, or type an id. **Remove** takes a sound out of chat and leaves the file on this PC.
+Chat plays a sound only after it is approved. A new id is saved under **Saved, not in chat** and does not play until you approve it. **Play** previews a saved sound. Clicking the id or the name copies the id. Paste a MyInstants page link into **Add**, or type an id. **Remove** takes a sound out of chat and leaves the file on this PC.
 
 **Sounds per chat message** is 0 to 8 and starts at 2. Extra cues in one message are skipped and not downloaded. `0` is speech only.
 
