@@ -3,7 +3,7 @@
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlencode, urlparse
-import base64, hashlib, io, json, re, sys, threading, time, traceback, urllib.error, urllib.request, wave
+import base64, hashlib, io, json, re, sys, tempfile, threading, time, traceback, urllib.error, urllib.request, wave
 
 try:
     sys.stdout.reconfigure(line_buffering=True)
@@ -14,6 +14,7 @@ except Exception:
 HOST, PORT = "127.0.0.1", 8765
 HERE = Path(__file__).resolve().parent
 CHANNEL_FILE = HERE / "channel.txt"
+SPEAKERS_FILE = HERE / "speakers.txt"
 CHANNEL_RE = re.compile(r"^[a-z0-9_]{1,25}$")
 tts = None
 load_error = None
@@ -27,8 +28,13 @@ last_action = ""
 delivered_gen = 0
 queue_lock = threading.Lock()
 queue_state = {"playing": "", "queue": [], "at": 0.0}
+listeners = {"obs": 0.0, "speakers": 0.0}
 listener_note = True
 LISTENER_TTL = 8
+speaker_lock = threading.Lock()
+speaker_gen = 0
+speaker_token = 0
+speaker_warned = False
 
 # Cue level, applied when a clip is mixed. The saved wav is left as downloaded.
 SOUND_PEAK = 0.4
@@ -81,9 +87,59 @@ def write_channel(name):
         CHANNEL_FILE.unlink()
     return name
 
+def speakers_on():
+    try:
+        return SPEAKERS_FILE.read_text(encoding="utf-8").strip() == "1"
+    except OSError:
+        return False
+
+def write_speakers(on):
+    SPEAKERS_FILE.write_text("1\n" if on else "0\n", encoding="utf-8")
+    return bool(on)
+
 def listener_is_live():
     with queue_lock:
         return queue_state["at"] > 0 and (time.time() - queue_state["at"]) < LISTENER_TTL
+
+def obs_is_live():
+    with queue_lock:
+        seen = listeners["obs"]
+    return seen > 0 and (time.time() - seen) < LISTENER_TTL
+
+def stop_speakers():
+    global speaker_token
+    if sys.platform != "win32":
+        return
+    import winsound
+    with speaker_lock:
+        speaker_token += 1
+        try:
+            winsound.PlaySound(None, winsound.SND_PURGE)
+        except RuntimeError:
+            pass
+
+def play_speakers(wav):
+    global speaker_gen, speaker_token, speaker_warned
+    if sys.platform != "win32" or not wav:
+        return
+    import winsound
+    with speaker_lock:
+        speaker_gen += 1
+        token = speaker_token
+        path = Path(tempfile.gettempdir()) / f"paradee-speakers-{speaker_gen & 1}.wav"
+    path.write_bytes(wav)
+    flags = winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT
+    with speaker_lock:
+        if token != speaker_token:
+            return
+        try:
+            winsound.PlaySound(None, winsound.SND_PURGE)
+            winsound.PlaySound(str(path), flags)
+            speaker_warned = False
+        except RuntimeError as exc:
+            if not speaker_warned:
+                speaker_warned = True
+                print(f"Speakers did not play: {exc}", flush=True)
 
 def control_snapshot():
     with control_cv:
@@ -122,8 +178,12 @@ def set_playback(action):
         held = pending_action
         control_cv.notify_all()
     print("Stop." if held == "stop" else "Skip.", flush=True)
+    stop_speakers()
     if not listener_is_live():
-        print("OBS source is not connected. Refresh that browser source.", flush=True)
+        if speakers_on():
+            print("Chat player is not connected. Reload Streaming TTS.", flush=True)
+        else:
+            print("OBS source is not connected. Refresh that browser source.", flush=True)
     return held
 
 def queue_view():
@@ -136,14 +196,20 @@ def queue_view():
         elif queue_state["at"] > 0 and not listener_note:
             listener_note = True
             announce = True
+        obs = listeners["obs"] > 0 and (time.time() - listeners["obs"]) < LISTENER_TTL
         payload = {
             "playing": queue_state["playing"] if live else "",
             "queue": list(queue_state["queue"]) if live else [],
             "live": live,
             "listener": live,
+            "obs": obs,
+            "speakers": speakers_on(),
         }
     if announce:
-        print("OBS source is not connected. Refresh that browser source.", flush=True)
+        if speakers_on():
+            print("Chat player disconnected. Reload Streaming TTS, or refresh the OBS browser source.", flush=True)
+        else:
+            print("OBS source is not connected. Refresh that browser source.", flush=True)
     return payload
 
 def clean_entry(item):
@@ -170,8 +236,9 @@ def entry_label(item):
     head = f"{who} ({voice})" if voice else who
     return f"{head}: {text}" if text else head
 
-def set_queue_state(playing, items):
+def set_queue_state(playing, items, role="obs"):
     global listener_note
+    role = "speakers" if str(role or "") == "speakers" else "obs"
     playing = clean_entry(playing)
     if not isinstance(items, list):
         items = []
@@ -182,6 +249,10 @@ def set_queue_state(playing, items):
             clean.append(entry)
     with queue_lock:
         now = time.time()
+        obs_live = listeners["obs"] > 0 and (now - listeners["obs"]) < LISTENER_TTL
+        if role == "speakers" and obs_live:
+            return
+        listeners[role] = now
         was_live = queue_state["at"] > 0 and (now - queue_state["at"]) < LISTENER_TTL
         changed = queue_state["playing"] != playing or queue_state["queue"] != clean
         queue_state["playing"] = playing
@@ -190,7 +261,10 @@ def set_queue_state(playing, items):
         if not was_live:
             listener_note = False
     if not was_live:
-        print("OBS source connected.", flush=True)
+        if role == "speakers":
+            print("Playing chat through the speakers.", flush=True)
+        else:
+            print("OBS source connected.", flush=True)
     if changed or not was_live:
         print(f"Playing: {entry_label(playing) or '(idle)'}", flush=True)
         if not clean:
@@ -1002,6 +1076,8 @@ class Handler(BaseHTTPRequestHandler):
             action = claim_cancel(started)
             if action in ("stop", "skip"):
                 return self.send_bytes(204, b"", extra={"X-Paradee-Control": action})
+        if cancelable and speakers_on() and obs_is_live():
+            play_speakers(wav)
         return self.send_bytes(200, wav, "audio/wav", {"X-Paradee-Cues": cues})
 
     def do_OPTIONS(self):
@@ -1019,8 +1095,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_bytes(200, (HERE/"favicon.ico").read_bytes(), "image/x-icon")
         if path == "/listen":
             return self.send_bytes(200, (HERE/"listen.html").read_bytes(), "text/html; charset=utf-8")
+        if path == "/chat-player.js":
+            return self.send_bytes(200, (HERE/"chat-player.js").read_bytes(), "text/javascript; charset=utf-8")
         if path == "/channel":
             return self.send_bytes(200, json.dumps({"channel": read_channel()}).encode())
+        if path == "/speakers":
+            return self.send_bytes(200, json.dumps({"on": speakers_on()}).encode())
         if path == "/control":
             wait = first_value(self.query(), "wait") == "1"
             return self.send_bytes(200, json.dumps({"action": take_playback(wait)}).encode())
@@ -1052,6 +1132,15 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = self.request_path()
         try:
+            if path == "/speakers":
+                data = json.loads(self.read_body() or b"{}")
+                if not isinstance(data, dict):
+                    raise ValueError("JSON must be an object.")
+                on = write_speakers(bool(data.get("on")))
+                if not on:
+                    stop_speakers()
+                print("Speakers on." if on else "Speakers off.", flush=True)
+                return self.send_bytes(200, json.dumps({"on": on}).encode())
             if path == "/channel":
                 raw = self.read_body()
                 if not raw:
@@ -1073,7 +1162,7 @@ class Handler(BaseHTTPRequestHandler):
                 data = json.loads(self.read_body() or b"{}")
                 if not isinstance(data, dict):
                     raise ValueError("JSON must be an object.")
-                set_queue_state(data.get("playing", ""), data.get("queue", []))
+                set_queue_state(data.get("playing", ""), data.get("queue", []), data.get("role", ""))
                 return self.send_bytes(200, json.dumps(queue_view()).encode())
             if path == "/sounds":
                 data = json.loads(self.read_body() or b"{}")
@@ -1113,7 +1202,7 @@ class Handler(BaseHTTPRequestHandler):
         return self.serve_speech(segments, pause_ms, chat, chat)
 
     def log_message(self, fmt, *args):
-        if self.path.split("?", 1)[0] in ("/queue", "/control", "/channel", "/health"):
+        if self.path.split("?", 1)[0] in ("/queue", "/control", "/channel", "/health", "/speakers"):
             return
         print("%s - %s" % (self.address_string(), fmt % args))
 

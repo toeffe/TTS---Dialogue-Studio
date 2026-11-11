@@ -68,7 +68,8 @@ body {
 }
 .top-status.ok { color: var(--primary); }
 .top-status.down { color: #FF6961; }
-.top-status[data-tip]::after {
+.top-status[data-tip]::after,
+.speakers[data-tip]::after {
   content: attr(data-tip);
   position: absolute;
   top: calc(100% + 8px);
@@ -95,7 +96,9 @@ body {
   transition: opacity 120ms ease, transform 120ms ease;
 }
 .top-status[data-tip]:hover::after,
-.top-status[data-tip]:focus-visible::after {
+.top-status[data-tip]:focus-visible::after,
+.speakers[data-tip]:hover::after,
+.speakers[data-tip]:focus-within::after {
   opacity: 1;
   transform: translateY(0);
   transition-delay: 280ms;
@@ -256,6 +259,19 @@ body:not(.local) #voicesGuide > summary { display: none; }
 .controls button:hover { background: var(--surface); color: var(--text); }
 .controls button.stop { color: #FF6961; border-color: rgba(255,105,97,0.7); }
 .controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.speakers {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.speakers input { width: 16px; height: 16px; accent-color: var(--primary); }
+.speakers:focus-within { color: var(--text); }
 .sound-blurb { margin: 12px 0 16px; font-size: 14px; color: var(--text-muted); }
 .sound-limit {
   display: flex;
@@ -434,7 +450,8 @@ body:not(.local) #voicesGuide > summary { display: none; }
     <div class="local-only">
       <ol class="steps">
         <li>Double-click <code>start.bat</code> and leave that window open.</li>
-        <li>In OBS, add a Browser Source with the address below. Check “Control audio via OBS”.</li>
+        <li>Turn on <strong>Play through speakers</strong> to hear chat on this PC. OBS can stay closed.</li>
+        <li>To put chat on stream, add a Browser Source with the address below. Check “Control audio via OBS”. Leave that source’s audio monitor off, or each line plays twice.</li>
         <li>Keep that source in the scene. Slide it off the canvas if the small status line should stay off stream.</li>
         <li>In chat, type <code>!tts puck: hello chat</code>. A cue alone needs no voice: <code>!tts (bark)</code>.</li>
         <li>Chat plays a sound only after you approve it below. A MyInstants id looks like <code>caching-49444</code>. Dialogue Studio adds a sound when you use it.</li>
@@ -463,7 +480,7 @@ body:not(.local) #voicesGuide > summary { display: none; }
       </table>
     </details>
   </details>
-  <details class="guide local-only" id="soundsGuide" open>
+  <details class="guide local-only" id="soundsGuide">
     <summary id="approvedSummary">Approved sounds</summary>
     <p class="sound-blurb">Chat plays a sound only when it is on this list. Paste the instant page link, or type an id.</p>
     <label class="sound-limit">Sounds per chat message
@@ -484,6 +501,9 @@ body:not(.local) #voicesGuide > summary { display: none; }
   <div class="controls local-only">
     <button type="button" id="skipLine">Skip</button>
     <button type="button" id="stopLine" class="stop">Stop</button>
+    <label class="speakers" data-tip="Hear chat on this PC. In OBS, leave the browser source audio monitor off or each line plays twice.">
+      <input type="checkbox" id="speakers"> Play through speakers
+    </label>
   </div>
   <div class="script local-only" id="queueBoard" role="list" aria-live="polite"></div>
   <p id="soundStatus" role="status"></p>
@@ -656,13 +676,37 @@ async function refreshQueue() {
     if (!response.ok) throw new Error('down');
     setServerState(true);
     const data = await response.json();
+    queueKnown = true;
     const connected = Boolean(data.listener);
+    obsLive = Boolean(data.obs);
+    if (typeof data.speakers === 'boolean' && Date.now() - speakersLocalAt > 1500 && data.speakers !== speakersOn) {
+      speakersOn = data.speakers;
+      speakersInput.checked = speakersOn;
+    }
     const listener = document.getElementById('listener');
-    listener.textContent = connected ? 'obs connected' : 'obs offline';
-    listener.className = 'top-status local-only ' + (connected ? 'ok' : 'down');
+    if (obsLive) {
+      listener.textContent = 'obs connected';
+      listener.dataset.tip = speakersOn
+        ? 'Chat is on stream and on this PC’s speakers. Keep the browser source monitor off.'
+        : 'In OBS, right-click the browser source and choose Refresh.';
+      listener.className = 'top-status local-only ok';
+    } else if (speakersOn && connected) {
+      listener.textContent = 'speakers';
+      listener.dataset.tip = 'Chat is playing through this PC’s speakers.';
+      listener.className = 'top-status local-only ok';
+    } else if (speakersOn) {
+      listener.textContent = 'starting speakers';
+      listener.dataset.tip = 'Set the Twitch channel, then leave this page open.';
+      listener.className = 'top-status local-only';
+    } else {
+      listener.textContent = 'obs offline';
+      listener.dataset.tip = 'In OBS, right-click the browser source and choose Refresh.';
+      listener.className = 'top-status local-only down';
+    }
     const playing = connected ? asLine(data.playing) : null;
     const items = connected && Array.isArray(data.queue) ? data.queue.map(asLine).filter(Boolean) : [];
     renderBoard(connected, playing, items);
+    syncChatPlayer();
   } catch {
     setServerState(false);
     const listener = document.getElementById('listener');
@@ -674,8 +718,117 @@ async function refreshQueue() {
 refreshQueue();
 setInterval(refreshQueue, 500);
 
-document.getElementById('skipLine').onclick = () => sendControl('skip');
-document.getElementById('stopLine').onclick = () => sendControl('stop');
+document.getElementById('skipLine').onclick = () => {
+  if (chatPlayer) chatPlayer.skip();
+  else sendControl('skip');
+};
+document.getElementById('stopLine').onclick = () => {
+  if (chatPlayer) chatPlayer.halt();
+  else sendControl('stop');
+};
+
+const speakersInput = document.getElementById('speakers');
+let speakersOn = false;
+let speakersLocalAt = 0;
+let obsLive = false;
+let queueKnown = false;
+let chatPlayer = null;
+let playerLoad = null;
+let playerStarting = false;
+let playerError = false;
+
+function unlockAudio() {
+  const audio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+  audio.play().catch(() => {});
+}
+
+function ensurePlayer() {
+  if (window.startChatPlayer) return Promise.resolve(window.startChatPlayer);
+  if (playerLoad) return playerLoad;
+  playerLoad = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = API + '/chat-player.js';
+    script.onload = () => {
+      if (window.startChatPlayer) resolve(window.startChatPlayer);
+      else reject(new Error('player'));
+    };
+    script.onerror = () => reject(new Error('player'));
+    document.body.appendChild(script);
+  }).catch(error => {
+    playerLoad = null;
+    throw error;
+  });
+  return playerLoad;
+}
+
+function syncChatPlayer() {
+  if (!queueKnown || !document.body.classList.contains('local')) return;
+  const want = speakersOn && !obsLive;
+  if (want && !chatPlayer) {
+    if (playerStarting) return;
+    playerStarting = true;
+    ensurePlayer().then(start => {
+      playerStarting = false;
+      if (!speakersOn || obsLive || chatPlayer) return;
+      playerError = false;
+      unlockAudio();
+      let gestureArmed = false;
+      chatPlayer = start({
+        role: 'speakers',
+        base: API,
+        externalControls: true,
+        onNeedGesture() {
+          if (gestureArmed) return;
+          gestureArmed = true;
+          soundStatus('Click the page once to hear chat through the speakers.', 'error');
+          const once = () => {
+            gestureArmed = false;
+            document.removeEventListener('pointerdown', once, true);
+            unlockAudio();
+            if (chatPlayer) chatPlayer.resume();
+          };
+          document.addEventListener('pointerdown', once, true);
+        }
+      });
+    }).catch(() => {
+      playerStarting = false;
+      if (playerError) return;
+      playerError = true;
+      soundStatus('Speaker playback did not load. Leave start.bat open, then reload.', 'error');
+    });
+    return;
+  }
+  if (!want && chatPlayer) {
+    chatPlayer.stop();
+    chatPlayer = null;
+  }
+}
+
+async function loadSpeakers() {
+  try {
+    const response = await fetch(API + '/speakers', {cache: 'no-store'});
+    if (!response.ok) return;
+    speakersOn = Boolean((await response.json()).on);
+    speakersInput.checked = speakersOn;
+    syncChatPlayer();
+  } catch { /* the queue poll will try again */ }
+}
+
+speakersInput.addEventListener('change', () => {
+  speakersOn = speakersInput.checked;
+  speakersLocalAt = Date.now();
+  if (speakersOn) unlockAudio();
+  syncChatPlayer();
+  fetch(API + '/speakers', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({on: speakersOn})
+  }).then(response => {
+    if (!response.ok) throw new Error('speakers');
+  }).catch(() => {
+    soundStatus('The Paradee server did not take that change. Leave start.bat open.', 'error');
+  });
+});
 
 function wireChannel() {
   channelInput.addEventListener('input', () => remember(cleanChannel(channelInput.value)));
@@ -953,6 +1106,7 @@ if (LOOPBACK) {
   showStreaming();
   wireChannel();
   loadSounds();
+  loadSpeakers();
   setInterval(loadSounds, 3000);
 } else {
   showVoices();
@@ -961,6 +1115,7 @@ if (LOOPBACK) {
     showStreaming();
     wireChannel();
     loadSounds();
+    loadSpeakers();
     setInterval(loadSounds, 3000);
   });
 }

@@ -93,7 +93,8 @@ Reads Twitch chat messages aloud in your stream. **Requires the local server (`s
    ```
    http://127.0.0.1:8765/listen
    ```
-3. On that Browser Source, enable **"Control audio via OBS."**
+3. On that Browser Source, enable **"Control audio via OBS."** Leave that source’s audio monitor off.
+4. On the Streaming TTS page, turn on **Play through speakers** to hear chat on this PC. Chat still plays when OBS is closed. With OBS open, the same lines also come out of the speakers. If the monitor is on, you hear each line twice.
 
 ### How viewers use it
 
