@@ -256,6 +256,119 @@ body:not(.local) #voicesGuide > summary { display: none; }
 .controls button:hover { background: var(--surface); color: var(--text); }
 .controls button.stop { color: #FF6961; border-color: rgba(255,105,97,0.7); }
 .controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sound-blurb { margin: 12px 0 16px; font-size: 14px; color: var(--text-muted); }
+.sound-limit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.sound-limit input {
+  width: 72px;
+  min-height: 36px;
+  padding: 0 10px;
+  font: 14px var(--mono);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+.sound-limit input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sound-add { display: flex; gap: 8px; max-width: 420px; margin-bottom: 8px; }
+.sound-add input {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 12px;
+  font: 14px var(--mono);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+.sound-add input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sound-add button, .sound-row button, #copyPanel {
+  min-height: 36px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 13px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.sound-add button:hover, .sound-row button:hover, #copyPanel:hover { background: var(--surface-2); color: var(--text); }
+.sound-add button:focus-visible, .sound-row button:focus-visible, #copyPanel:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#copyPanel { margin: 0 0 12px; }
+.sound-add button:disabled, .sound-row button:disabled { opacity: 0.5; cursor: default; }
+#soundStatus {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 20;
+  margin: 0;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  font-size: 14px;
+  color: var(--text);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(8px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+#soundStatus.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+#soundStatus.ok { color: var(--primary); }
+#soundStatus.error { color: #FF6961; }
+#soundList.script, #savedList.script {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 20px;
+  row-gap: 12px;
+  padding: 14px 20px;
+}
+.sound-row { display: contents; }
+.sound-row.is-empty {
+  display: block;
+  grid-column: 1 / -1;
+  padding: 10px 12px;
+  border-bottom: 0;
+}
+.sound-row.is-empty > * { border: 0; padding: 0; }
+.sound-row button.sound-copy {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.3;
+  text-align: left;
+  justify-self: start;
+  cursor: pointer;
+}
+.sound-row button.sound-play {
+  width: 72px;
+  padding-left: 0;
+  padding-right: 0;
+  text-align: center;
+}
+.sound-row button.sound-copy:hover { text-decoration: underline; }
+.sound-row button.sound-copy:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sound-id { font-family: var(--mono); font-size: 13px; }
+.sound-label { font-size: 13px; color: var(--text-muted); overflow-wrap: anywhere; }
+.sound-row .grow { flex: 1; }
+.sound-row.waiting { opacity: 0.55; }
 .url {
   margin: 0 0 calc(var(--space) * 4);
   padding: 10px 12px;
@@ -323,7 +436,8 @@ body:not(.local) #voicesGuide > summary { display: none; }
         <li>Double-click <code>start.bat</code> and leave that window open.</li>
         <li>In OBS, add a Browser Source with the address below. Check “Control audio via OBS”.</li>
         <li>Keep that source in the scene. Slide it off the canvas if the small status line should stay off stream.</li>
-        <li>In chat, type <code>!tts puck: hello chat</code>.</li>
+        <li>In chat, type <code>!tts puck: hello chat</code>. A cue alone needs no voice: <code>!tts (bark)</code>.</li>
+        <li>Chat plays a sound only after you approve it below. A MyInstants id looks like <code>caching-49444</code>. Dialogue Studio adds a sound when you use it.</li>
       </ol>
       <label class="channel">Twitch channel
         <input id="channel" placeholder="channel name" spellcheck="false" autocomplete="off">
@@ -349,11 +463,30 @@ body:not(.local) #voicesGuide > summary { display: none; }
       </table>
     </details>
   </details>
+  <details class="guide local-only" id="soundsGuide" open>
+    <summary id="approvedSummary">Approved sounds</summary>
+    <p class="sound-blurb">Chat plays a sound only when it is on this list. Paste the instant page link, or type an id.</p>
+    <label class="sound-limit">Sounds per chat message
+      <input id="chatLimit" type="number" min="0" max="8" step="1" value="2">
+    </label>
+    <form id="soundAdd" class="sound-add">
+      <input id="soundName" placeholder="myinstants URL or id" spellcheck="false" autocomplete="off" aria-label="MyInstants link or sound id">
+      <button type="submit">Add</button>
+    </form>
+    <button type="button" id="copyPanel">Copy panel list</button>
+    <div id="soundList" class="script"></div>
+  </details>
+  <details class="guide local-only" id="savedGuide">
+    <summary id="savedSummary">Saved, not in chat</summary>
+    <p class="sound-blurb">These files are on this PC. Approve one to let chat play it.</p>
+    <div id="savedList" class="script"></div>
+  </details>
   <div class="controls local-only">
     <button type="button" id="skipLine">Skip</button>
     <button type="button" id="stopLine" class="stop">Stop</button>
   </div>
   <div class="script local-only" id="queueBoard" role="list" aria-live="polite"></div>
+  <p id="soundStatus" role="status"></p>
 </div>
 <script>
 const LOOPBACK = location.hostname === '127.0.0.1' || location.hostname === 'localhost' || location.hostname === '[::1]';
@@ -563,12 +696,273 @@ async function localServerRunning() {
   }
 }
 
+let statusTimer = null;
+function soundStatus(text, kind) {
+  const el = document.getElementById('soundStatus');
+  el.textContent = text || '';
+  el.className = `${kind || ''} show`.trim();
+  clearTimeout(statusTimer);
+  statusTimer = setTimeout(() => el.classList.remove('show'), kind === 'error' ? 4200 : 2400);
+}
+
+let preview = null;
+
+function setPlayLabel(button, playing) {
+  const key = button.dataset.key || '';
+  button.textContent = playing ? 'Stop' : 'Play';
+  button.setAttribute('aria-label', (playing ? 'Stop ' : 'Play ') + key);
+}
+
+function stopPreview() {
+  if (!preview) return;
+  preview.audio.pause();
+  if (preview.button.isConnected) setPlayLabel(preview.button, false);
+  preview = null;
+}
+
+function playSound(key, button) {
+  const same = preview && preview.button === button;
+  stopPreview();
+  if (same) return;
+  const audio = new Audio(API + '/sounds/preview?key=' + encodeURIComponent(key));
+  preview = {audio, button};
+  setPlayLabel(button, true);
+  const finish = () => { if (preview && preview.audio === audio) stopPreview(); };
+  audio.onended = finish;
+  audio.onerror = () => {
+    finish();
+    soundStatus('That preview did not play.', 'error');
+  };
+  audio.play().catch(() => {
+    finish();
+    soundStatus('Click Play again to hear it.', 'error');
+  });
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.top = '0';
+    area.style.left = '0';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.focus();
+    area.select();
+    area.setSelectionRange(0, text.length);
+    try { return document.execCommand('copy'); } catch { return false; }
+    finally { area.remove(); }
+  }
+}
+
+async function copyId(key) {
+  const ok = await copyText(key);
+  soundStatus(ok ? 'Copied ' + key : 'Could not copy ' + key, ok ? 'ok' : 'error');
+}
+
+let soundCatalog = {approved: [], saved: []};
+
+function panelName(name) {
+  return String(name || '').replace(/[*_[\]]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function panelMarkdown(data) {
+  const approved = Array.isArray(data.approved) ? data.approved : [];
+  const byKey = new Map((data.saved || []).map(item => [item.key, item]));
+  const lines = ['Play a sound with !tts (id).', ''];
+  for (const key of approved) {
+    const item = byKey.get(key);
+    const name = item && panelName(item.name) && panelName(item.name) !== key ? panelName(item.name) : '';
+    lines.push(name ? '- **' + name + '** — !tts (' + key + ')' : '- !tts (' + key + ')');
+  }
+  return lines.join('\n');
+}
+
+function soundRow(item, approved) {
+  const row = document.createElement('div');
+  row.className = 'sound-row';
+  const copyName = document.createElement('button');
+  copyName.type = 'button';
+  copyName.className = 'sound-copy sound-id';
+  copyName.textContent = item.key;
+  copyName.setAttribute('aria-label', 'Copy ' + item.key);
+  copyName.addEventListener('click', () => copyId(item.key));
+  const copyLabel = document.createElement(item.name && item.name !== item.key ? 'button' : 'span');
+  copyLabel.className = item.name && item.name !== item.key ? 'sound-copy sound-label' : 'sound-label';
+  if (copyLabel.tagName === 'BUTTON') {
+    copyLabel.type = 'button';
+    copyLabel.textContent = item.name;
+    copyLabel.setAttribute('aria-label', 'Copy ' + item.key);
+    copyLabel.addEventListener('click', () => copyId(item.key));
+  }
+  row.append(copyName, copyLabel);
+  if (item.saved !== false) {
+    const play = document.createElement('button');
+    play.type = 'button';
+    play.className = 'sound-play';
+    play.dataset.key = item.key;
+    setPlayLabel(play, false);
+    play.addEventListener('click', () => playSound(item.key, play));
+    row.append(play);
+  } else {
+    row.append(document.createElement('span'));
+  }
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = approved ? 'Remove' : 'Approve';
+  button.addEventListener('click', () => changeSound(approved ? 'remove' : 'add', item.key));
+  row.append(button);
+  return row;
+}
+
+function emptyRow(text) {
+  const row = document.createElement('div');
+  row.className = 'sound-row is-empty';
+  const label = document.createElement('span');
+  label.className = 'sound-label';
+  label.textContent = text;
+  row.append(label);
+  return row;
+}
+
+function renderSounds(data) {
+  const approved = Array.isArray(data.approved) ? data.approved : [];
+  const saved = Array.isArray(data.saved) ? data.saved : [];
+  const byKey = new Map(saved.map(item => [item.key, item]));
+  const waiting = saved.filter(item => !item.approved);
+  soundCatalog = {approved, saved};
+  stopPreview();
+  document.getElementById('approvedSummary').textContent = `Approved sounds (${approved.length})`;
+  document.getElementById('savedSummary').textContent = `Saved, not in chat (${waiting.length})`;
+  const approvedList = document.getElementById('soundList');
+  const savedList = document.getElementById('savedList');
+  approvedList.replaceChildren();
+  savedList.replaceChildren();
+  if (!approved.length) approvedList.append(emptyRow('Chat will not play sounds until you add one.'));
+  else approved.forEach(key => approvedList.append(soundRow(byKey.get(key) || {key, name: key, saved: false}, true)));
+  if (!waiting.length) savedList.append(emptyRow('Nothing else is saved on this PC.'));
+  else waiting.forEach(item => savedList.append(soundRow(item, false)));
+}
+
+let soundCatalogKey = '';
+async function loadSounds() {
+  if (!document.body.classList.contains('local')) return;
+  try {
+    const response = await fetch(API + '/sounds', {cache: 'no-store'});
+    if (!response.ok) throw new Error('down');
+    const data = await response.json();
+    const limit = document.getElementById('chatLimit');
+    if (limit && document.activeElement !== limit && data.chatLimit != null) limit.value = data.chatLimit;
+    const key = JSON.stringify(data);
+    if (key === soundCatalogKey) return;
+    soundCatalogKey = key;
+    renderSounds(data);
+  } catch {
+    soundStatus('The sound list needs start.bat.', 'error');
+  }
+}
+
+async function changeSound(action, value) {
+  soundStatus(action === 'add' ? 'Adding…' : '');
+  const form = document.getElementById('soundAdd');
+  form.querySelector('button').disabled = true;
+  try {
+    const response = await fetch(API + '/sounds', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({[action]: value})
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      soundStatus(text || 'That sound was not added.', 'error');
+      return;
+    }
+    renderSounds(JSON.parse(text));
+    if (action === 'add') {
+      document.getElementById('soundName').value = '';
+      soundStatus('Added. Chat can play it.');
+    } else {
+      soundStatus('Removed from chat. The saved file is still on this PC.');
+    }
+  } catch {
+    soundStatus('The Paradee server did not take that change. Leave start.bat open.', 'error');
+  } finally {
+    form.querySelector('button').disabled = false;
+  }
+}
+
+document.getElementById('copyPanel').addEventListener('click', async () => {
+  const approved = soundCatalog.approved || [];
+  if (!approved.length) {
+    soundStatus('Nothing approved to copy.', 'error');
+    return;
+  }
+  const text = panelMarkdown(soundCatalog);
+  const ok = await copyText(text);
+  if (!ok) {
+    soundStatus('Could not copy the panel list.', 'error');
+    return;
+  }
+  const note = text.length > 1000 ? ' It may be too long for one Twitch panel.' : '';
+  soundStatus('Copied ' + approved.length + ' sounds for a Twitch panel.' + note, 'ok');
+});
+
+document.getElementById('chatLimit').addEventListener('change', async () => {
+  const input = document.getElementById('chatLimit');
+  const value = Number(input.value);
+  if (!Number.isInteger(value) || value < 0 || value > 8) {
+    soundStatus('Use 0 to 8 sounds per chat message.', 'error');
+    return;
+  }
+  try {
+    const response = await fetch(API + '/sounds', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({chatLimit: value})
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      soundStatus(text || 'That limit was not saved.', 'error');
+      return;
+    }
+    const data = JSON.parse(text);
+    soundCatalogKey = JSON.stringify(data);
+    if (document.activeElement !== input) input.value = data.chatLimit;
+    soundStatus(value === 1 ? 'Chat can use 1 sound per message.' : `Chat can use ${value} sounds per message.`, 'ok');
+  } catch {
+    soundStatus('The Paradee server did not take that change. Leave start.bat open.', 'error');
+  }
+});
+
+document.getElementById('soundAdd').addEventListener('submit', event => {
+  event.preventDefault();
+  const value = document.getElementById('soundName').value.trim();
+  if (!value) {
+    soundStatus('Paste a MyInstants link, or type an id.', 'error');
+    return;
+  }
+  changeSound('add', value);
+});
+
 if (LOOPBACK) {
   showStreaming();
   wireChannel();
+  loadSounds();
+  setInterval(loadSounds, 3000);
 } else {
   showVoices();
-  localServerRunning().then(ok => { if (ok) { showStreaming(); wireChannel(); } });
+  localServerRunning().then(ok => {
+    if (!ok) return;
+    showStreaming();
+    wireChannel();
+    loadSounds();
+    setInterval(loadSounds, 3000);
+  });
 }
 </script>
 </body>

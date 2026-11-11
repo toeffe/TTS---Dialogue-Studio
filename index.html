@@ -650,7 +650,7 @@ function render(){
           <button type="button" class="icon danger" data-action="remove" ${lines.length===1?'disabled':''} aria-label="Remove line">×</button>
         </div>
       </div>
-      <textarea class="field-text" data-field="text" rows="2" placeholder="Dialogue text" aria-label="Dialogue for ${escapeAttr(l.speaker)}">${escapeHtml(l.text)}</textarea>
+      <textarea class="field-text" data-field="text" rows="2" placeholder="Dialogue text, with sounds like (bark&amp;fart)" aria-label="Dialogue for ${escapeAttr(l.speaker)}">${escapeHtml(l.text)}</textarea>
     </article>`).join('');
 }
 
@@ -742,6 +742,7 @@ Rules:
 - pause_ms on each line is the silence after that line, from 0 to 5000. 350 is a normal beat. The last line is not followed by silence.
 - title is a short name for the scene.
 - speaker is the character's name. voice is one id from the list. text is what they say.
+- Sound cues in parentheses are played, not spoken. (bark) plays one sound. (bark&fart) plays those sounds in that order. A MyInstants id such as (caching-49444) plays that exact sound.
 - Before the user answers, the reply is only the questions. After that, the whole reply is the raw JSON. No file, and no explanation before or after it.
 
 Shape:

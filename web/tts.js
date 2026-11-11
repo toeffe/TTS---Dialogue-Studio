@@ -65,6 +65,14 @@ async function cached(url, onBytes) {
   return { buffer: bytes.buffer, fromCache: false };
 }
 
+function stripUrls(text) {
+  return String(text || '')
+    .replace(/(?:https?:\/\/|www\.)[^\s<>"']+/gi, ' ')
+    .replace(/\(\s*\)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function sentences(text) {
   return text.trim().split(/(?<=[.!?…])\s+|(?<=[।॥])\s*|\n+/u).map(s => s.trim()).filter(Boolean);
 }
@@ -224,7 +232,7 @@ export async function synthesize(engine, segments, onProgress, signal) {
     const speed = Math.max(0.5, Math.min(2, Number(segment.speed) || 1));
     const voiceIndex = Math.max(0, config.voices.indexOf(voice));
     const jobs = [];
-    for (const sentence of sentences(segment.text)) {
+    for (const sentence of sentences(stripUrls(segment.text))) {
       const phonemes = phonemize(espeak, sentence, voice);
       for (const piece of chunks(phonemes)) jobs.push(piece);
     }

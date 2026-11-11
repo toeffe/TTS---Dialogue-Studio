@@ -35,6 +35,14 @@ function Ensure-SpacyModel([string]$Python) {
     }
 }
 
+function Ensure-Miniaudio([string]$Python) {
+    & $Python -c "import miniaudio" 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Installing miniaudio for sound cues..."
+        Invoke-Checked $Python @("-m", "pip", "install", "--no-warn-script-location", "miniaudio")
+    }
+}
+
 function Install-Paradee([string]$Python) {
     # The embeddable Python ._pth file hides pip's temporary build environment,
     # so hatchling must be installed here and the package built without isolation.
@@ -115,6 +123,7 @@ try {
     }
 
     Ensure-SpacyModel $Python
+    Ensure-Miniaudio $Python
     Write-Host "Using $Python"
     Write-Host "Starting Paradee 1.3 Dialogue Studio at http://127.0.0.1:8765"
     $waiter = [powershell]::Create().AddScript({

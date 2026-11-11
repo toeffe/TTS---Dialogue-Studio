@@ -188,14 +188,14 @@ async function drain() {
 
 function enqueue(text, voiceId, name) {
   if (queue.length >= QUEUE_LIMIT) queue.shift();
-  const voiceName = VOICE_SAY[voiceId] || voiceId;
+  const voiceName = voiceId ? (VOICE_SAY[voiceId] || voiceId) : '';
   const who = name || 'Chat';
   queue.push({
     text,
     voice: voiceId,
     name: who,
     voiceName,
-    label: who + ' (' + voiceName + '): ' + text
+    label: voiceName ? who + ' (' + voiceName + '): ' + text : who + ': ' + text
   });
   reportQueue();
   drain();
@@ -214,6 +214,12 @@ function quotedMessage(raw) {
   return text;
 }
 
+function cueOnly(message) {
+  const groups = message.match(/\(([^()]*)\)/g);
+  if (!groups || !groups.some(group => group.slice(1, -1).trim())) return false;
+  return message.replace(/\([^()]*\)/g, '').replace(/\s+/g, '') === '';
+}
+
 function ttsRequest(arg) {
   let body = String(arg || '').trim();
   if (body.length >= 2) {
@@ -224,11 +230,11 @@ function ttsRequest(arg) {
     }
   }
   const colon = body.indexOf(':');
-  if (colon <= 0) return null;
-  const voiceId = VOICE_ALIASES[body.slice(0, colon).trim().toLowerCase()];
-  if (!voiceId) return null;
-  let message = quotedMessage(body.slice(colon + 1)).replace(/\s+/g, ' ').trim();
+  const head = colon > 0 ? body.slice(0, colon).trim().toLowerCase() : '';
+  const voiceId = head ? VOICE_ALIASES[head] : '';
+  let message = quotedMessage(voiceId ? body.slice(colon + 1) : body).replace(/\s+/g, ' ').trim();
   if (!message) return null;
+  if (!voiceId && !cueOnly(message)) return null;
   if (message.length > 180) message = message.slice(0, 177) + '...';
   return {voice: voiceId, message};
 }

@@ -1,5 +1,6 @@
 .venv/
 channel.txt
+sounds/
 Copy.zip
 _pycache_/
 __pycache__/server.cpython-310.pyc

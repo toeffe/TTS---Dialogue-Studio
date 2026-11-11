@@ -1,36 +1,28 @@
 # Paradee Dialogue Studio
 
-Dialogue studio for English, Hindi, French, and Spanish. Two ways to run it.
+Dialogue for English, Hindi, French, and Spanish. Two ways to run it.
 
-## Website
+## How to run it
 
-Publish this folder with GitHub Pages. The site root is `index.html`. Speech runs in the visitor’s browser. Nothing is installed. https://paradee.t-tek.dev/voices.html lists the voices on its own. If `start.bat` is running on that PC, the same page turns into Streaming TTS and saves the channel to the local server.
+Publish this folder as a website. `index.html` is Dialogue Studio. https://tts.t-tek.dev/voices.html lists the voices on its own. If `start.bat` is running on that PC, the same page turns into Streaming TTS.
 
-The first visit needs the internet. The page downloads the 8.5 MB Paradee model into this site’s browser cache, named `paradee-1.3`. It is not a file in Downloads. In Chrome that cache is under DevTools, Application, Cache Storage. Later visits reuse it. Clearing site data downloads it again. The page says when it is downloading, when it is using the saved copy, and which line it is speaking.
+On Windows, keep `start.bat`, `bootstrap.ps1`, `server.py`, and `index.html` in one folder, then double-click `start.bat`. The first launch needs the internet and can take several minutes. It downloads portable Python, Paradee 1.3, and the English spaCy model. No system Python and no Git are required. The browser opens at http://127.0.0.1:8765 once the server is listening. Later launches only start the server. Close the console window to stop.
 
-## Download (Windows x64)
+Other programs on this PC can request speech while that server is running. `GET /speak?text=Hello&voice=af_heart` returns a WAV file. `POST /dialogue` accepts a full scene. `GET /health` reports when the model is ready.
 
-This path runs Paradee on the PC. Keep `start.bat`, `bootstrap.ps1`, `server.py`, and `index.html` in one folder, then double-click `start.bat`. The same studio page is used here and on the website. On this PC it sends speech to the local server. On the website it speaks in the browser, and switches to this PC when `start.bat` is running.
+## Dialogue Studio
 
-The first launch needs the internet and can take several minutes. No system Python and no Git are required. The script downloads portable Python 3.10.11 into `.venv`, then installs Paradee 1.3 and the English spaCy model `en_core_web_sm`. The browser opens at http://127.0.0.1:8765 once the server is listening. The speech model downloads the first time the server starts.
+Assign a voice to each line, then generate one WAV. Import or export the lines as JSON, or copy the AI instructions and let another model write the scene.
 
-If setup stops after Python is in `.venv`, double-click `start.bat` again. It continues from where it left off. Later launches only start the server. Close the console window to stop.
+On the website, speech runs in the visitor’s browser. The first visit downloads the 8.5 MB Paradee model into this site’s browser cache, named `paradee-1.3`. It is not a file in Downloads. Later visits reuse it. Clearing site data downloads it again. With `start.bat` running, the same page sends speech to this PC instead.
 
-Manual start, after setup:
+Voices: heart, isabella, puck, fable, alpha, omega, siwis, alex.
 
-```
-.venv\python.exe server.py
-```
+A line can include sound cues. They play where they sit and are not spoken. `(bark)` plays one sound. `(bark&fart)` plays those sounds in that order. A MyInstants id works the same way, as in `(ketchup-flaske-99638)`. Generating a line that uses a sound adds that sound to the chat approved list. Studio has no per-message sound cap.
 
-If `.venv` is a normal virtual environment, use `.venv\Scripts\python.exe server.py` instead.
+## Streaming TTS
 
-Other programs on this PC can request speech while that server is running. The response is a WAV file.
-
-```
-http://127.0.0.1:8765/speak?text=Hello&voice=af_heart
-```
-
-POST the same path with `{"text":"Hello","voice":"af_heart","speed":1}` for a longer line. `POST /dialogue` still accepts a full scene. `GET /health` reports when the model is ready.
+This needs `start.bat`. Set the Twitch channel at http://127.0.0.1:8765/voices.html.
 
 Twitch chat in OBS stays on the popout. Speech is a second Browser Source:
 
@@ -38,7 +30,13 @@ Twitch chat in OBS stays on the popout. Speech is a second Browser Source:
 http://127.0.0.1:8765/listen
 ```
 
-Turn on “Control audio via OBS” for that source. Ordinary chat stays quiet. A viewer speaks one line with `!tts puck: hello chat`. The name before the colon picks the voice for that line. Setup and the voice names are on the Streaming TTS page, http://127.0.0.1:8765/voices.html : heart, isabella, puck, fable, alpha, omega, siwis, alex.
+Turn on “Control audio via OBS” for that source. Ordinary chat stays quiet. A viewer speaks one line with `!tts puck: hello chat`. The name before the colon picks the voice for that line. A cue by itself needs no voice: `!tts (bark)`.
+
+Chat plays a sound only after it is approved. A new id is saved under **Saved, not in chat** and does not play until you approve it. **Play** previews a saved sound. Clicking the id or the name copies the id. **Copy panel list** copies markdown for a Twitch About panel. Paste a MyInstants page link into **Add**, or type an id. **Remove** takes a sound out of chat and leaves the file on this PC.
+
+**Sounds per chat message** is 0 to 8 and starts at 2. Extra cues in one message are skipped and not downloaded. `0` is speech only.
+
+The `sounds/` folder on this PC keeps the wav files, `index.json`, `approved.txt`, and `chat-limit.txt`. Restarting the server reuses them. Loud clips are turned down so they sit under the voice.
 
 ## Credits
 
