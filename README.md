@@ -24,14 +24,14 @@ The local server is required for Streaming TTS, and it also upgrades Dialogue St
 
 **Setup (Windows only):**
 
-1. Keep these four files together in one folder:
-   - `start.bat`
-   - `bootstrap.ps1`
-   - `server.py`
-   - `index.html`
-2. Double-click `start.bat`.
+1. Clone the project:
+   ```
+   git clone https://github.com/toeffe/paradee-Dialogue-Studio.git
+   ```
+   No Git installed? Download and unzip https://github.com/toeffe/paradee-Dialogue-Studio/archive/refs/heads/main.zip
+2. Open that folder and double-click `start.bat`.
 
-**First launch:** needs an internet connection and can take several minutes. It automatically downloads a portable Python, the Paradee 1.3 model, and the English spaCy model — you don't need Python or Git already installed.
+**First launch:** needs an internet connection and can take several minutes. It automatically downloads a portable Python, the Paradee 1.3 model, and the English spaCy model — you don't need Python already installed.
 
 **Every launch after that:** just starts the server, no downloads.
 
